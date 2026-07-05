@@ -111,7 +111,10 @@ function App() {
     phone: '',
   })
   const [phoneVerified, setPhoneVerified] = useState(false)
+  const [isLoginIdAvailable, setIsLoginIdAvailable] = useState(false)
+  const [isCheckingLoginId, setIsCheckingLoginId] = useState(false)
   const [authMessage, setAuthMessage] = useState('')
+  const [loginIdCheckMessage, setLoginIdCheckMessage] = useState('')
   const [activeCategory, setActiveCategory] = useState<Category>('all')
   const [products, setProducts] = useState<Product[]>([])
   const [isProductsLoading, setIsProductsLoading] = useState(true)
@@ -251,6 +254,11 @@ function App() {
   }
 
   function changeSignupField(field: keyof SignupForm, value: string) {
+    if (field === 'loginId') {
+      setIsLoginIdAvailable(false)
+      setLoginIdCheckMessage('')
+    }
+
     setSignupForm((form) => ({ ...form, [field]: value }))
   }
 
@@ -280,6 +288,11 @@ function App() {
       return
     }
 
+    if (!isLoginIdAvailable) {
+      setAuthMessage('아이디 중복확인을 먼저 완료해주세요.')
+      return
+    }
+
     const response = await fetch(`${API_BASE_URL}/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -305,6 +318,43 @@ function App() {
     setAuthMode('login')
   }
 
+  async function checkLoginId() {
+    const loginId = signupForm.loginId.trim()
+    setAuthMessage('')
+    setLoginIdCheckMessage('')
+
+    if (!loginId) {
+      setLoginIdCheckMessage('아이디를 입력해주세요.')
+      setIsLoginIdAvailable(false)
+      return
+    }
+
+    setIsCheckingLoginId(true)
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/auth/check-login-id?loginId=${encodeURIComponent(loginId)}`,
+      )
+
+      if (!response.ok) {
+        setLoginIdCheckMessage(await readResponseMessage(response))
+        setIsLoginIdAvailable(false)
+        return
+      }
+
+      const available = (await response.json()) as boolean
+      setIsLoginIdAvailable(available)
+      setLoginIdCheckMessage(
+        available ? '사용 가능한 아이디입니다.' : '이미 사용 중인 아이디입니다.',
+      )
+    } catch {
+      setIsLoginIdAvailable(false)
+      setLoginIdCheckMessage('아이디 중복확인에 실패했습니다.')
+    } finally {
+      setIsCheckingLoginId(false)
+    }
+  }
+
   async function submitLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setAuthMessage('')
@@ -313,7 +363,7 @@ function App() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: loginId,
+        loginId,
         password: loginPassword,
       }),
     })
@@ -441,7 +491,7 @@ function App() {
                   <input
                     value={loginId}
                     onChange={(event) => setLoginId(event.target.value)}
-                    placeholder="이메일을 입력하세요"
+                    placeholder="아이디를 입력하세요"
                     autoComplete="username"
                     required
                   />
@@ -490,16 +540,26 @@ function App() {
                     required
                   />
                 </label>
-                <label>
-                  아이디
-                  <input
-                    value={signupForm.loginId}
-                    onChange={(event) => changeSignupField('loginId', event.target.value)}
-                    placeholder="사용할 아이디"
-                    autoComplete="username"
-                    required
-                  />
-                </label>
+                <div className="address-row">
+                  <label>
+                    아이디
+                    <input
+                      value={signupForm.loginId}
+                      onChange={(event) => changeSignupField('loginId', event.target.value)}
+                      placeholder="사용할 아이디"
+                      autoComplete="username"
+                      required
+                    />
+                  </label>
+                  <button type="button" onClick={checkLoginId} disabled={isCheckingLoginId}>
+                    {isCheckingLoginId ? '확인중' : '중복확인'}
+                  </button>
+                </div>
+                {loginIdCheckMessage && (
+                  <p className={isLoginIdAvailable ? 'auth-success' : 'auth-message'}>
+                    {loginIdCheckMessage}
+                  </p>
+                )}
                 <div className="auth-grid">
                   <label>
                     비밀번호
