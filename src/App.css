@@ -851,6 +851,264 @@ input {
   background: transparent;
 }
 
+.role-select {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.role-select legend {
+  grid-column: 1 / -1;
+  margin-bottom: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #343125;
+}
+
+.role-select label {
+  display: grid;
+  gap: 4px;
+  min-height: 86px;
+  padding: 14px;
+  border: 1px solid #d8cec0;
+  border-radius: 8px;
+  background: #fffdf9;
+  cursor: pointer;
+}
+
+.role-select label.is-selected {
+  border-color: #314932;
+  background: #f0f5ed;
+}
+
+.role-select input {
+  width: 16px;
+  height: 16px;
+}
+
+.role-select span {
+  font-weight: 800;
+  color: #1e1d19;
+}
+
+.role-select small {
+  color: #766d60;
+  line-height: 1.45;
+}
+
+.seller-console {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  min-height: calc(100vh - 70px);
+  background: #eef2f5;
+}
+
+.seller-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px 18px;
+  background: #2f3a46;
+  color: #f6f8fa;
+}
+
+.seller-profile {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  text-align: center;
+}
+
+.seller-avatar {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: #f6f8fa;
+  color: #2f3a46;
+  font-weight: 900;
+}
+
+.seller-profile span {
+  color: #b9c2ca;
+  font-size: 13px;
+}
+
+.seller-sidebar nav {
+  display: grid;
+  gap: 6px;
+}
+
+.seller-sidebar button {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #dbe2e8;
+  text-align: left;
+}
+
+.seller-sidebar button.is-active,
+.seller-sidebar button:hover {
+  background: #24303b;
+  color: #ffffff;
+}
+
+.seller-logout {
+  margin-top: auto;
+}
+
+.seller-main {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  padding: 22px;
+}
+
+.seller-topbar,
+.seller-summary-card,
+.seller-panel {
+  border: 1px solid #dce3e8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.seller-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+}
+
+.seller-topbar span,
+.seller-summary-card span,
+.sales-stat-grid span {
+  color: #71808d;
+  font-size: 13px;
+}
+
+.seller-topbar h1,
+.seller-panel h2 {
+  margin: 4px 0 0;
+  color: #202832;
+}
+
+.seller-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.seller-summary-card {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+}
+
+.seller-summary-card strong {
+  color: #19b36b;
+  font-size: 28px;
+}
+
+.seller-summary-card p {
+  margin: 0;
+  color: #2f3a46;
+  font-weight: 700;
+}
+
+.seller-dashboard-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 14px;
+}
+
+.seller-panel {
+  padding: 18px;
+}
+
+.seller-panel-wide {
+  grid-column: span 1;
+}
+
+.seller-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.seller-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.seller-tabs button {
+  border: 1px solid #dce3e8;
+  background: #f7fafc;
+}
+
+.seller-tabs button.is-active {
+  border-color: #19b36b;
+  background: #19b36b;
+  color: #ffffff;
+}
+
+.sales-line {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  min-height: 180px;
+  margin-top: 22px;
+  border-bottom: 1px solid #dce3e8;
+}
+
+.sales-line span {
+  flex: 1;
+  height: 2px;
+  border-radius: 999px;
+  background: #19b36b;
+}
+
+.empty-seller-state {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  color: #8996a3;
+}
+
+.notice-list {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding-left: 18px;
+  color: #4f5d68;
+}
+
+.sales-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sales-stat-grid div {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid #e1e7ec;
+  border-radius: 8px;
+  background: #f8fbfc;
+}
+
+.sales-stat-grid strong {
+  color: #202832;
+  font-size: 22px;
+}
+
 @media (max-width: 1080px) {
   .site-header {
     grid-template-columns: 1fr;
@@ -867,7 +1125,9 @@ input {
 
   .product-browser,
   .product-detail,
-  .cart-layout {
+  .cart-layout,
+  .seller-console,
+  .seller-dashboard-grid {
     grid-template-columns: 1fr;
   }
 
@@ -908,6 +1168,12 @@ input {
   }
 
   .purchase-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .role-select,
+  .seller-summary-grid,
+  .sales-stat-grid {
     grid-template-columns: 1fr;
   }
 }

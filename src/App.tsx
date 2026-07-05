@@ -3,8 +3,9 @@ import type { FormEvent } from 'react'
 import './App.css'
 
 type Category = 'all' | 'echeveria' | 'haworthia' | 'lithops' | 'sale'
-type View = 'home' | 'shop' | 'auth'
+type View = 'home' | 'shop' | 'auth' | 'seller'
 type AuthMode = 'login' | 'signup'
+type UserRole = 'USER' | 'SELLER' | 'ADMIN'
 
 type Product = {
   id: number
@@ -43,6 +44,7 @@ type SignupForm = {
   name: string
   email: string
   loginId: string
+  role: Exclude<UserRole, 'ADMIN'>
   password: string
   passwordConfirm: string
   address: string
@@ -94,8 +96,119 @@ const categoryLabels: Record<Category, string> = {
   sale: '세일',
 }
 
+const roleLabels: Record<Exclude<UserRole, 'ADMIN'>, string> = {
+  USER: '구매자',
+  SELLER: '판매자',
+}
+
+function SellerDashboard({ role, onLogout }: { role: UserRole; onLogout: () => void }) {
+  const isAdmin = role === 'ADMIN'
+  const summaryCards = [
+    { label: '입금대기', value: 0, helper: '신규 주문' },
+    { label: '배송준비', value: 0, helper: '배송 전' },
+    { label: '취소요청', value: 0, helper: '반품 요청' },
+    { label: '오늘정산', value: 0, helper: '정산 예정' },
+  ]
+  const salesStats = [
+    { label: '오늘 매출', value: '0원' },
+    { label: '이번 달 매출', value: '0원' },
+    { label: '주문 건수', value: '0건' },
+    { label: '등록 상품', value: '0개' },
+  ]
+
+  return (
+    <section className="seller-console">
+      <aside className="seller-sidebar">
+        <div className="seller-profile">
+          <div className="seller-avatar">{isAdmin ? 'A' : 'S'}</div>
+          <strong>{isAdmin ? '관리자 센터' : '판매자 센터'}</strong>
+          <span>flower garden</span>
+        </div>
+        <nav aria-label="판매자 메뉴">
+          <button type="button" className="is-active">대시보드</button>
+          <button type="button">상품관리</button>
+          <button type="button">주문관리</button>
+          <button type="button">매출관리</button>
+          <button type="button">문의관리</button>
+          {isAdmin && <button type="button">회원관리</button>}
+        </nav>
+        <button type="button" className="seller-logout" onClick={onLogout}>
+          로그아웃
+        </button>
+      </aside>
+
+      <section className="seller-main">
+        <header className="seller-topbar">
+          <div>
+            <span>{isAdmin ? 'admin workspace' : 'seller workspace'}</span>
+            <h1>{isAdmin ? '관리자 운영 현황' : '판매 현황'}</h1>
+          </div>
+          <button type="button">공지사항</button>
+        </header>
+
+        <section className="seller-summary-grid" aria-label="주문 처리 현황">
+          {summaryCards.map((card) => (
+            <article key={card.label} className="seller-summary-card">
+              <span>{card.helper}</span>
+              <strong>{card.value}</strong>
+              <p>{card.label}</p>
+            </article>
+          ))}
+        </section>
+
+        <section className="seller-dashboard-grid">
+          <article className="seller-panel seller-panel-wide">
+            <div className="seller-panel-heading">
+              <h2>매출 통계</h2>
+              <div className="seller-tabs">
+                <button type="button" className="is-active">금주</button>
+                <button type="button">금월</button>
+                <button type="button">금년</button>
+              </div>
+            </div>
+            <div className="sales-line" aria-hidden="true">
+              {Array.from({ length: 18 }).map((_, index) => (
+                <span key={index} />
+              ))}
+            </div>
+          </article>
+
+          <article className="seller-panel">
+            <h2>미답변 문의</h2>
+            <div className="empty-seller-state">등록된 문의가 없습니다.</div>
+          </article>
+
+          <article className="seller-panel">
+            <h2>공지사항</h2>
+            <ul className="notice-list">
+              <li>판매자 운영 정책 안내</li>
+              <li>정산 기준 및 배송 정책 확인</li>
+              <li>상품 이미지 등록 가이드</li>
+            </ul>
+          </article>
+
+          <article className="seller-panel seller-panel-wide">
+            <h2>매출 요약</h2>
+            <div className="sales-stat-grid">
+              {salesStats.map((stat) => (
+                <div key={stat.label}>
+                  <span>{stat.label}</span>
+                  <strong>{stat.value}</strong>
+                </div>
+              ))}
+            </div>
+          </article>
+        </section>
+      </section>
+    </section>
+  )
+}
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => Boolean(localStorage.getItem('accessToken')))
+  const [accountRole, setAccountRole] = useState<UserRole>(
+    () => (localStorage.getItem('accountRole') as UserRole | null) ?? 'USER',
+  )
   const [view, setView] = useState<View>('home')
   const [authMode, setAuthMode] = useState<AuthMode>('login')
   const [loginId, setLoginId] = useState('')
@@ -104,6 +217,7 @@ function App() {
     name: '',
     email: '',
     loginId: '',
+    role: 'USER',
     password: '',
     passwordConfirm: '',
     address: '',
@@ -248,7 +362,9 @@ function App() {
 
   function logout() {
     localStorage.removeItem('accessToken')
+    localStorage.removeItem('accountRole')
     setIsLoggedIn(false)
+    setAccountRole('USER')
     setAuthMessage('')
     setView('home')
   }
@@ -300,6 +416,7 @@ function App() {
         name: signupForm.name,
         email: signupForm.email,
         loginId: signupForm.loginId,
+        role: signupForm.role,
         password: signupForm.password,
         address: signupForm.address,
         addressDetail: signupForm.addressDetail,
@@ -375,6 +492,7 @@ function App() {
 
     const data = await response.json()
     const accessToken = data.accessToken ?? data.token
+    const role = (data.role ?? 'USER') as UserRole
 
     if (!accessToken) {
       setAuthMessage('로그인은 성공했지만 토큰 응답값을 찾지 못했습니다.')
@@ -382,10 +500,12 @@ function App() {
     }
 
     localStorage.setItem('accessToken', accessToken)
+    localStorage.setItem('accountRole', role)
+    setAccountRole(role)
     setIsLoggedIn(true)
     setLoginPassword('')
     setAuthMessage('')
-    setView('home')
+    setView(role === 'SELLER' || role === 'ADMIN' ? 'seller' : 'home')
   }
 
   function addToCart(product: Product) {
@@ -437,6 +557,11 @@ function App() {
         </button>
 
         <nav className="member-nav" aria-label="회원 메뉴">
+          {isLoggedIn && (accountRole === 'SELLER' || accountRole === 'ADMIN') && (
+            <button type="button" onClick={() => setView('seller')}>
+              판매자센터
+            </button>
+          )}
           <button type="button" onClick={isLoggedIn ? logout : openLogin}>
             {isLoggedIn ? '로그아웃' : '로그인'}
           </button>
@@ -448,7 +573,9 @@ function App() {
         </nav>
       </header>
 
-      {view === 'auth' ? (
+      {view === 'seller' ? (
+        <SellerDashboard role={accountRole} onLogout={logout} />
+      ) : view === 'auth' ? (
         <section className="auth-screen">
           <div className="auth-panel">
             <div className="auth-heading">
@@ -560,6 +687,26 @@ function App() {
                     {loginIdCheckMessage}
                   </p>
                 )}
+                <fieldset className="role-select">
+                  <legend>계정 유형</legend>
+                  {(Object.keys(roleLabels) as Array<Exclude<UserRole, 'ADMIN'>>).map((role) => (
+                    <label key={role} className={signupForm.role === role ? 'is-selected' : ''}>
+                      <input
+                        type="radio"
+                        name="role"
+                        value={role}
+                        checked={signupForm.role === role}
+                        onChange={() => changeSignupField('role', role)}
+                      />
+                      <span>{roleLabels[role]}</span>
+                      <small>
+                        {role === 'USER'
+                          ? '상품을 둘러보고 주문합니다.'
+                          : '상품과 주문, 매출을 관리합니다.'}
+                      </small>
+                    </label>
+                  ))}
+                </fieldset>
                 <div className="auth-grid">
                   <label>
                     비밀번호
