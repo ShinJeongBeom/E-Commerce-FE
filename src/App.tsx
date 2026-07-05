@@ -19,6 +19,21 @@ type Product = {
   images: string[]
 }
 
+type ProductResponse = {
+  id: number
+  name: string
+  plantType: string | null
+  careLevel: string | null
+  lightRequirement: string | null
+  wateringCycle: string | null
+  imageUrl: string | null
+  potIncluded: string | null
+  description: string | null
+  price: number
+  stock: number
+  status: string | null
+}
+
 type CartItem = {
   product: Product
   quantity: number
@@ -35,97 +50,41 @@ type SignupForm = {
   phone: string
 }
 
-const API_BASE_URL = 'http://localhost:8080'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
+const DEFAULT_PRODUCT_IMAGE =
+  'https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=900&q=80'
 
-const products: Product[] = [
-  {
-    id: 1,
-    name: '방울복랑금',
-    category: 'echeveria',
-    price: 12000,
-    salePrice: 9900,
+function toCategory(plantType: string | null): Product['category'] {
+  const value = plantType?.toLowerCase() ?? ''
+
+  if (value.includes('haworthia') || value.includes('하월')) return 'haworthia'
+  if (value.includes('lithops') || value.includes('리톱')) return 'lithops'
+
+  return 'echeveria'
+}
+
+function toProduct(response: ProductResponse): Product {
+  const description = response.description?.trim() || '상품 상세 정보가 준비 중입니다.'
+  const tags = [
+    response.plantType,
+    response.careLevel,
+    response.lightRequirement,
+    response.wateringCycle,
+    response.potIncluded,
+  ].filter((tag): tag is string => Boolean(tag))
+
+  return {
+    id: response.id,
+    name: response.name,
+    category: toCategory(response.plantType),
+    price: response.price,
     deliveryFee: 3000,
-    shortInfo: '둥근 잎에 은은한 금빛 무늬가 도는 인기 다육식물',
-    detail: '햇빛이 잘 드는 창가에서 색감이 살아나며, 흙이 충분히 마른 뒤 물을 주면 건강하게 자랍니다.',
-    tags: ['초보 추천', '금빛 무늬', '소형 화분'],
-    images: [
-      'https://images.unsplash.com/photo-1459411621453-7b03977f4bfc?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1509223197845-458d87318791?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=900&q=80',
-    ],
-  },
-  {
-    id: 2,
-    name: '에케베리아 라우이',
-    category: 'echeveria',
-    price: 18000,
-    deliveryFee: 3000,
-    shortInfo: '분가루가 고운 로제트형 다육',
-    detail: '잎 표면의 백분이 매력적인 품종입니다. 물이 잎에 오래 남지 않게 통풍을 신경 써주세요.',
-    tags: ['로제트', '고급 품종', '밝은 햇빛'],
-    images: [
-      'https://images.unsplash.com/photo-1493957988430-a5f2e15f39a3?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1459411621453-7b03977f4bfc?auto=format&fit=crop&w=900&q=80',
-    ],
-  },
-  {
-    id: 3,
-    name: '하월시아 옵투사',
-    category: 'haworthia',
-    price: 15000,
-    salePrice: 12900,
-    deliveryFee: 3000,
-    shortInfo: '투명한 창이 매력적인 실내 다육',
-    detail: '직사광선보다 밝은 간접광을 좋아합니다. 실내 책상이나 선반에서 키우기 좋습니다.',
-    tags: ['실내 추천', '간접광', '투명창'],
-    images: [
-      'https://images.unsplash.com/photo-1533038590840-1cde6e668a91?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1509223197845-458d87318791?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1493957988430-a5f2e15f39a3?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=900&q=80',
-    ],
-  },
-  {
-    id: 4,
-    name: '리톱스 믹스',
-    category: 'lithops',
-    price: 9000,
-    deliveryFee: 3000,
-    shortInfo: '작고 독특한 돌멩이 모양 다육',
-    detail: '과습에 약하므로 물주기 간격을 길게 두는 것이 좋습니다. 독특한 모양으로 수집용 인기가 높습니다.',
-    tags: ['희귀한 형태', '수집용', '소량 물주기'],
-    images: [
-      'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1533038590840-1cde6e668a91?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1493957988430-a5f2e15f39a3?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=900&q=80',
-    ],
-  },
-  {
-    id: 5,
-    name: '세덤 모건뷰티',
-    category: 'echeveria',
-    price: 11000,
-    deliveryFee: 3000,
-    shortInfo: '통통한 잎과 은은한 색감의 데일리 다육',
-    detail: '건조에 강하고 번식이 쉬워 처음 다육식물을 키우는 분에게도 잘 맞습니다.',
-    tags: ['번식 쉬움', '초보 추천', '통통한 잎'],
-    images: [
-      'https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1459411621453-7b03977f4bfc?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1509223197845-458d87318791?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1533038590840-1cde6e668a91?auto=format&fit=crop&w=900&q=80',
-    ],
-  },
-]
+    shortInfo: description,
+    detail: description,
+    tags,
+    images: [response.imageUrl || DEFAULT_PRODUCT_IMAGE],
+  }
+}
 
 const categoryLabels: Record<Category, string> = {
   all: '전체',
@@ -154,8 +113,11 @@ function App() {
   const [phoneVerified, setPhoneVerified] = useState(false)
   const [authMessage, setAuthMessage] = useState('')
   const [activeCategory, setActiveCategory] = useState<Category>('all')
-  const [selectedProduct, setSelectedProduct] = useState<Product>(products[0])
-  const [selectedImage, setSelectedImage] = useState(products[0].images[0])
+  const [products, setProducts] = useState<Product[]>([])
+  const [isProductsLoading, setIsProductsLoading] = useState(true)
+  const [productError, setProductError] = useState('')
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [selectedImage, setSelectedImage] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [cart, setCart] = useState<CartItem[]>([])
   const [searchKeyword, setSearchKeyword] = useState('')
@@ -165,7 +127,7 @@ function App() {
     if (activeCategory === 'all') return products
     if (activeCategory === 'sale') return products.filter((product) => product.salePrice)
     return products.filter((product) => product.category === activeCategory)
-  }, [activeCategory])
+  }, [activeCategory, products])
 
   const cartTotal = cart.reduce(
     (sum, item) => sum + (item.product.salePrice ?? item.product.price) * item.quantity,
@@ -182,14 +144,67 @@ function App() {
         .toLowerCase()
         .includes(keyword),
     )
-  }, [searchKeyword])
+  }, [searchKeyword, products])
 
   const newProducts = products.slice(0, 3)
   const saleProducts = products.filter((product) => product.salePrice)
   const carouselProducts = saleProducts.length > 0 ? saleProducts : products
-  const carouselProduct = carouselProducts[carouselIndex % carouselProducts.length]
+  const carouselProduct =
+    carouselProducts.length > 0 ? carouselProducts[carouselIndex % carouselProducts.length] : null
 
   useEffect(() => {
+    const controller = new AbortController()
+
+    async function loadProducts() {
+      setIsProductsLoading(true)
+      setProductError('')
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/products`, {
+          signal: controller.signal,
+        })
+
+        if (!response.ok) {
+          throw new Error(await readResponseMessage(response))
+        }
+
+        const data = (await response.json()) as ProductResponse[]
+        const nextProducts = data
+          .filter((product) => product.status !== 'HIDDEN')
+          .map(toProduct)
+
+        setProducts(nextProducts)
+        setSelectedProduct((current) => {
+          const selected = current
+            ? nextProducts.find((product) => product.id === current.id)
+            : nextProducts[0]
+          setSelectedImage(selected?.images[0] ?? '')
+          return selected ?? null
+        })
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+
+        setProducts([])
+        setSelectedProduct(null)
+        setSelectedImage('')
+        setProductError(
+          error instanceof Error ? error.message : '상품 목록을 불러오지 못했습니다.',
+        )
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsProductsLoading(false)
+        }
+      }
+    }
+
+    loadProducts()
+
+    return () => controller.abort()
+  }, [])
+
+  useEffect(() => {
+    if (carouselProducts.length === 0) return undefined
+
     const timer = window.setInterval(() => {
       setCarouselIndex((index) => (index + 1) % carouselProducts.length)
     }, 3500)
@@ -348,7 +363,7 @@ function App() {
     )
   }
 
-  const productPrice = selectedProduct.salePrice ?? selectedProduct.price
+  const productPrice = selectedProduct ? (selectedProduct.salePrice ?? selectedProduct.price) : 0
   const productTotal = productPrice * quantity
 
   return (
@@ -583,20 +598,30 @@ function App() {
               </form>
             </div>
 
-            <button type="button" className="carousel-card" onClick={() => selectProduct(carouselProduct)}>
-              <img src={carouselProduct.images[0]} alt={carouselProduct.name} />
-              <div>
-                <span>{carouselProduct.salePrice ? '특가 다육이' : '추천 다육이'}</span>
-                <h2>{carouselProduct.name}</h2>
-                <p>{carouselProduct.shortInfo}</p>
-                <strong>{(carouselProduct.salePrice ?? carouselProduct.price).toLocaleString()}원</strong>
+            {carouselProduct ? (
+              <button type="button" className="carousel-card" onClick={() => selectProduct(carouselProduct)}>
+                <img src={carouselProduct.images[0]} alt={carouselProduct.name} />
+                <div>
+                  <span>{carouselProduct.salePrice ? '특가 다육이' : '추천 다육이'}</span>
+                  <h2>{carouselProduct.name}</h2>
+                  <p>{carouselProduct.shortInfo}</p>
+                  <strong>{(carouselProduct.salePrice ?? carouselProduct.price).toLocaleString()}원</strong>
+                </div>
+                <div className="carousel-dots">
+                  {carouselProducts.map((product, index) => (
+                    <span key={product.id} className={index === carouselIndex ? 'is-active' : ''} />
+                  ))}
+                </div>
+              </button>
+            ) : (
+              <div className="carousel-card">
+                <div>
+                  <span>{isProductsLoading ? '상품 불러오는 중' : '상품 준비 중'}</span>
+                  <h2>{isProductsLoading ? '상품 목록을 불러오고 있습니다' : '등록된 상품이 없습니다'}</h2>
+                  <p>{productError || '백엔드 상품 API와 연결되면 이 영역에 추천 상품이 표시됩니다.'}</p>
+                </div>
               </div>
-              <div className="carousel-dots">
-                {carouselProducts.map((product, index) => (
-                  <span key={product.id} className={index === carouselIndex ? 'is-active' : ''} />
-                ))}
-              </div>
-            </button>
+            )}
           </section>
 
           <section className="home-section">
@@ -610,13 +635,19 @@ function App() {
               </button>
             </div>
             <div className="home-product-grid">
-              {newProducts.map((product) => (
-                <button key={product.id} type="button" onClick={() => selectProduct(product)}>
-                  <img src={product.images[0]} alt={product.name} />
-                  <span>{product.name}</span>
-                  <strong>{product.price.toLocaleString()}원</strong>
-                </button>
-              ))}
+              {newProducts.length > 0 ? (
+                newProducts.map((product) => (
+                  <button key={product.id} type="button" onClick={() => selectProduct(product)}>
+                    <img src={product.images[0]} alt={product.name} />
+                    <span>{product.name}</span>
+                    <strong>{product.price.toLocaleString()}원</strong>
+                  </button>
+                ))
+              ) : (
+                <p className="empty-message">
+                  {isProductsLoading ? '상품 목록을 불러오고 있습니다.' : productError || '등록된 상품이 없습니다.'}
+                </p>
+              )}
             </div>
           </section>
 
@@ -631,14 +662,18 @@ function App() {
               </button>
             </div>
             <div className="home-product-grid">
-              {saleProducts.map((product) => (
-                <button key={product.id} type="button" onClick={() => selectProduct(product)}>
-                  <img src={product.images[0]} alt={product.name} />
-                  <span>{product.name}</span>
-                  <del>{product.price.toLocaleString()}원</del>
-                  <strong>{product.salePrice?.toLocaleString()}원</strong>
-                </button>
-              ))}
+              {saleProducts.length > 0 ? (
+                saleProducts.map((product) => (
+                  <button key={product.id} type="button" onClick={() => selectProduct(product)}>
+                    <img src={product.images[0]} alt={product.name} />
+                    <span>{product.name}</span>
+                    <del>{product.price.toLocaleString()}원</del>
+                    <strong>{product.salePrice?.toLocaleString()}원</strong>
+                  </button>
+                ))
+              ) : (
+                <p className="empty-message">현재 특가 상품이 없습니다.</p>
+              )}
             </div>
           </section>
 
@@ -651,13 +686,17 @@ function App() {
                 </div>
               </div>
               <div className="home-product-grid">
-                {homeSearchProducts.map((product) => (
-                  <button key={product.id} type="button" onClick={() => selectProduct(product)}>
-                    <img src={product.images[0]} alt={product.name} />
-                    <span>{product.name}</span>
-                    <strong>{(product.salePrice ?? product.price).toLocaleString()}원</strong>
-                  </button>
-                ))}
+                {homeSearchProducts.length > 0 ? (
+                  homeSearchProducts.map((product) => (
+                    <button key={product.id} type="button" onClick={() => selectProduct(product)}>
+                      <img src={product.images[0]} alt={product.name} />
+                      <span>{product.name}</span>
+                      <strong>{(product.salePrice ?? product.price).toLocaleString()}원</strong>
+                    </button>
+                  ))
+                ) : (
+                  <p className="empty-message">검색 결과가 없습니다.</p>
+                )}
               </div>
             </section>
           )}
@@ -693,99 +732,115 @@ function App() {
 
       <section className="product-browser">
         <aside className="product-list" aria-label="상품 목록">
-          {filteredProducts.map((product) => (
-            <button
-              key={product.id}
-              type="button"
-              className={selectedProduct.id === product.id ? 'product-tile is-selected' : 'product-tile'}
-              onClick={() => selectProduct(product)}
-            >
-              <img src={product.images[0]} alt={product.name} />
-              <span>{product.name}</span>
-              <strong>{(product.salePrice ?? product.price).toLocaleString()}원</strong>
-              {product.salePrice && <em>특가</em>}
-            </button>
-          ))}
+          {filteredProducts.length > 0 ? (
+            filteredProducts.map((product) => (
+              <button
+                key={product.id}
+                type="button"
+                className={selectedProduct?.id === product.id ? 'product-tile is-selected' : 'product-tile'}
+                onClick={() => selectProduct(product)}
+              >
+                <img src={product.images[0]} alt={product.name} />
+                <span>{product.name}</span>
+                <strong>{(product.salePrice ?? product.price).toLocaleString()}원</strong>
+                {product.salePrice && <em>특가</em>}
+              </button>
+            ))
+          ) : (
+            <p className="empty-message">
+              {isProductsLoading ? '상품 목록을 불러오고 있습니다.' : productError || '표시할 상품이 없습니다.'}
+            </p>
+          )}
         </aside>
 
         <section className="product-detail" aria-label="상품 상세">
-          <div className="gallery">
-            <div className="main-image">
-              <img src={selectedImage} alt={selectedProduct.name} />
-            </div>
-            <div className="thumb-row">
-              {selectedProduct.images.map((image) => (
-                <button
-                  key={image}
-                  type="button"
-                  className={selectedImage === image ? 'is-active' : ''}
-                  onClick={() => setSelectedImage(image)}
-                >
-                  <img src={image} alt={`${selectedProduct.name} 상세 사진`} />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="purchase-panel">
-            <div className="product-heading">
-              <p>{categoryLabels[selectedProduct.category]}</p>
-              <h2>{selectedProduct.name}</h2>
-              <strong>{productPrice.toLocaleString()}원</strong>
-              {selectedProduct.salePrice && <del>{selectedProduct.price.toLocaleString()}원</del>}
-            </div>
-
-            <dl className="info-list">
-              <div>
-                <dt>세부정보</dt>
-                <dd>{selectedProduct.detail}</dd>
+          {selectedProduct ? (
+            <>
+              <div className="gallery">
+                <div className="main-image">
+                  <img src={selectedImage} alt={selectedProduct.name} />
+                </div>
+                <div className="thumb-row">
+                  {selectedProduct.images.map((image) => (
+                    <button
+                      key={image}
+                      type="button"
+                      className={selectedImage === image ? 'is-active' : ''}
+                      onClick={() => setSelectedImage(image)}
+                    >
+                      <img src={image} alt={`${selectedProduct.name} 상세 사진`} />
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div>
-                <dt>배송비</dt>
-                <dd>{selectedProduct.deliveryFee.toLocaleString()}원</dd>
-              </div>
-              <div>
-                <dt>특징</dt>
-                <dd>{selectedProduct.tags.join(' · ')}</dd>
-              </div>
-            </dl>
 
-            <label className="quantity-control">
-              갯수
-              <input
-                type="number"
-                min="1"
-                value={quantity}
-                onChange={(event) => setQuantity(Math.max(1, Number(event.target.value)))}
-              />
-            </label>
+              <div className="purchase-panel">
+                <div className="product-heading">
+                  <p>{categoryLabels[selectedProduct.category]}</p>
+                  <h2>{selectedProduct.name}</h2>
+                  <strong>{productPrice.toLocaleString()}원</strong>
+                  {selectedProduct.salePrice && <del>{selectedProduct.price.toLocaleString()}원</del>}
+                </div>
 
-            <div className="order-summary">
-              <div>
-                <span>주문수량</span>
-                <strong>{quantity}개</strong>
+                <dl className="info-list">
+                  <div>
+                    <dt>세부정보</dt>
+                    <dd>{selectedProduct.detail}</dd>
+                  </div>
+                  <div>
+                    <dt>배송비</dt>
+                    <dd>{selectedProduct.deliveryFee.toLocaleString()}원</dd>
+                  </div>
+                  <div>
+                    <dt>특징</dt>
+                    <dd>{selectedProduct.tags.join(' · ')}</dd>
+                  </div>
+                </dl>
+
+                <label className="quantity-control">
+                  갯수
+                  <input
+                    type="number"
+                    min="1"
+                    value={quantity}
+                    onChange={(event) => setQuantity(Math.max(1, Number(event.target.value)))}
+                  />
+                </label>
+
+                <div className="order-summary">
+                  <div>
+                    <span>주문수량</span>
+                    <strong>{quantity}개</strong>
+                  </div>
+                  <div>
+                    <span>총 상품금액</span>
+                    <strong>{productTotal.toLocaleString()}원</strong>
+                  </div>
+                </div>
+
+                <div className="purchase-actions">
+                  <button type="button" className="primary-action">
+                    구매하기
+                  </button>
+                  <button type="button" onClick={() => addToCart(selectedProduct)}>
+                    장바구니에 담기
+                  </button>
+                  <button type="button" className="naver-pay">
+                    네이버 페이 구매
+                  </button>
+                  <button type="button" className="kakao-pay">
+                    카카오 페이 구매
+                  </button>
+                </div>
               </div>
-              <div>
-                <span>총 상품금액</span>
-                <strong>{productTotal.toLocaleString()}원</strong>
-              </div>
+            </>
+          ) : (
+            <div className="purchase-panel">
+              <p className="empty-message">
+                {isProductsLoading ? '상품 상세 정보를 불러오고 있습니다.' : productError || '선택할 상품이 없습니다.'}
+              </p>
             </div>
-
-            <div className="purchase-actions">
-              <button type="button" className="primary-action">
-                구매하기
-              </button>
-              <button type="button" onClick={() => addToCart(selectedProduct)}>
-                장바구니에 담기
-              </button>
-              <button type="button" className="naver-pay">
-                네이버 페이 구매
-              </button>
-              <button type="button" className="kakao-pay">
-                카카오 페이 구매
-              </button>
-            </div>
-          </div>
+          )}
         </section>
       </section>
 
