@@ -998,6 +998,30 @@ input {
   color: #202832;
 }
 
+.seller-approval {
+  margin: 6px 0 0;
+  color: #71808d;
+  font-size: 13px;
+}
+
+.seller-error {
+  border-color: #f0b3b3;
+  background: #fff7f7;
+  color: #a63333;
+}
+
+.seller-pending {
+  display: grid;
+  gap: 8px;
+  border-color: #f1d28a;
+  background: #fff9ea;
+}
+
+.seller-pending p {
+  margin: 0;
+  color: #7a6428;
+}
+
 .seller-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1109,6 +1133,41 @@ input {
   font-size: 22px;
 }
 
+.seller-table {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.seller-table-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) 120px 120px 100px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #e1e7ec;
+  border-radius: 8px;
+  background: #f8fbfc;
+}
+
+.seller-table-row span {
+  overflow: hidden;
+  color: #202832;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seller-table-row strong {
+  color: #19a363;
+}
+
+.seller-table-row em,
+.seller-table-row small {
+  color: #71808d;
+  font-style: normal;
+}
+
 @media (max-width: 1080px) {
   .site-header {
     grid-template-columns: 1fr;
@@ -1173,7 +1232,8 @@ input {
 
   .role-select,
   .seller-summary-grid,
-  .sales-stat-grid {
+  .sales-stat-grid,
+  .seller-table-row {
     grid-template-columns: 1fr;
   }
 }

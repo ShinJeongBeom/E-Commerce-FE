@@ -88,6 +88,18 @@ function toProduct(response: ProductResponse): Product {
   }
 }
 
+async function readApiResponseMessage(response: Response) {
+  const contentType = response.headers.get('content-type') ?? ''
+
+  if (contentType.includes('application/json')) {
+    const data = await response.json()
+    return data.message ?? data.error ?? '요청 처리에 실패했습니다.'
+  }
+
+  const text = await response.text()
+  return text || '요청 처리에 실패했습니다.'
+}
+
 const categoryLabels: Record<Category, string> = {
   all: '전체',
   echeveria: '에케베리아',
@@ -101,19 +113,142 @@ const roleLabels: Record<Exclude<UserRole, 'ADMIN'>, string> = {
   SELLER: '판매자',
 }
 
+type SellerProfileResponse = {
+  sellerProfileId: number
+  storeName: string
+  approvalStatus: 'PENDING' | 'APPROVED' | 'SUSPENDED'
+}
+
+type SellerDashboardResponse = {
+  profile: SellerProfileResponse
+  waitingPaymentCount: number
+  preparingDeliveryCount: number
+  cancelledOrderCount: number
+  todaySettlementAmount: number
+  todaySalesAmount: number
+  monthlySalesAmount: number
+  orderCount: number
+  productCount: number
+  notices: string[]
+}
+
+type SellerProductResponse = {
+  id: number
+  name: string
+  price: number
+  stock: number
+  status: string
+  imageUrl: string
+}
+
+type SellerOrderResponse = {
+  id: number
+  orderNumber: string
+  totalPrice: number
+  status: string
+  receiverName: string
+  receiverPhone: string
+  shippingAddress: string
+}
+
+type SellerSalesResponse = {
+  todaySalesAmount: number
+  monthlySalesAmount: number
+  orderCount: number
+  averageOrderAmount: number
+}
+
+type SellerInquiryResponse = {
+  id: number
+  title: string
+  status: string
+}
+
+type SellerMenu = 'dashboard' | 'products' | 'orders' | 'sales' | 'inquiries'
+
 function SellerDashboard({ role, onLogout }: { role: UserRole; onLogout: () => void }) {
   const isAdmin = role === 'ADMIN'
+  const [activeMenu, setActiveMenu] = useState<SellerMenu>('dashboard')
+  const [isLoading, setIsLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [dashboard, setDashboard] = useState<SellerDashboardResponse | null>(null)
+  const [products, setProducts] = useState<SellerProductResponse[]>([])
+  const [orders, setOrders] = useState<SellerOrderResponse[]>([])
+  const [sales, setSales] = useState<SellerSalesResponse | null>(null)
+  const [inquiries, setInquiries] = useState<SellerInquiryResponse[]>([])
+
+  const sellerMenus: Array<{ id: SellerMenu; label: string }> = [
+    { id: 'dashboard', label: '대시보드' },
+    { id: 'products', label: '상품관리' },
+    { id: 'orders', label: '주문관리' },
+    { id: 'sales', label: '매출관리' },
+    { id: 'inquiries', label: '문의관리' },
+  ]
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    async function fetchSellerResource<T>(path: string): Promise<T> {
+      const accessToken = localStorage.getItem('accessToken')
+
+      const response = await fetch(`${API_BASE_URL}${path}`, {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        signal: controller.signal,
+      })
+
+      if (!response.ok) {
+        throw new Error(await readApiResponseMessage(response))
+      }
+
+      return response.json() as Promise<T>
+    }
+
+    async function loadSellerCenter() {
+      setIsLoading(true)
+      setErrorMessage('')
+
+      try {
+        const [dashboardData, productData, orderData, salesData, inquiryData] = await Promise.all([
+          fetchSellerResource<SellerDashboardResponse>('/seller-center/dashboard'),
+          fetchSellerResource<SellerProductResponse[]>('/seller-center/products'),
+          fetchSellerResource<SellerOrderResponse[]>('/seller-center/orders'),
+          fetchSellerResource<SellerSalesResponse>('/seller-center/sales'),
+          fetchSellerResource<SellerInquiryResponse[]>('/seller-center/inquiries'),
+        ])
+
+        setDashboard(dashboardData)
+        setProducts(productData)
+        setOrders(orderData)
+        setSales(salesData)
+        setInquiries(inquiryData)
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        setErrorMessage(error instanceof Error ? error.message : '판매자센터 정보를 불러오지 못했습니다.')
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadSellerCenter()
+
+    return () => controller.abort()
+  }, [])
+
+  const profile = dashboard?.profile
+  const isPending = profile?.approvalStatus === 'PENDING'
   const summaryCards = [
-    { label: '입금대기', value: 0, helper: '신규 주문' },
-    { label: '배송준비', value: 0, helper: '배송 전' },
-    { label: '취소요청', value: 0, helper: '반품 요청' },
-    { label: '오늘정산', value: 0, helper: '정산 예정' },
+    { label: '입금대기', value: dashboard?.waitingPaymentCount ?? 0, helper: '신규 주문' },
+    { label: '배송준비', value: dashboard?.preparingDeliveryCount ?? 0, helper: '배송 전' },
+    { label: '취소요청', value: dashboard?.cancelledOrderCount ?? 0, helper: '반품 요청' },
+    { label: '오늘정산', value: `${(dashboard?.todaySettlementAmount ?? 0).toLocaleString()}원`, helper: '정산 예정' },
   ]
   const salesStats = [
-    { label: '오늘 매출', value: '0원' },
-    { label: '이번 달 매출', value: '0원' },
-    { label: '주문 건수', value: '0건' },
-    { label: '등록 상품', value: '0개' },
+    { label: '오늘 매출', value: `${(sales?.todaySalesAmount ?? dashboard?.todaySalesAmount ?? 0).toLocaleString()}원` },
+    { label: '이번 달 매출', value: `${(sales?.monthlySalesAmount ?? dashboard?.monthlySalesAmount ?? 0).toLocaleString()}원` },
+    { label: '주문 건수', value: `${sales?.orderCount ?? dashboard?.orderCount ?? 0}건` },
+    { label: '등록 상품', value: `${dashboard?.productCount ?? products.length}개` },
   ]
 
   return (
@@ -122,14 +257,19 @@ function SellerDashboard({ role, onLogout }: { role: UserRole; onLogout: () => v
         <div className="seller-profile">
           <div className="seller-avatar">{isAdmin ? 'A' : 'S'}</div>
           <strong>{isAdmin ? '관리자 센터' : '판매자 센터'}</strong>
-          <span>flower garden</span>
+          <span>{profile?.storeName ?? 'flower garden'}</span>
         </div>
         <nav aria-label="판매자 메뉴">
-          <button type="button" className="is-active">대시보드</button>
-          <button type="button">상품관리</button>
-          <button type="button">주문관리</button>
-          <button type="button">매출관리</button>
-          <button type="button">문의관리</button>
+          {sellerMenus.map((menu) => (
+            <button
+              key={menu.id}
+              type="button"
+              className={activeMenu === menu.id ? 'is-active' : ''}
+              onClick={() => setActiveMenu(menu.id)}
+            >
+              {menu.label}
+            </button>
+          ))}
           {isAdmin && <button type="button">회원관리</button>}
         </nav>
         <button type="button" className="seller-logout" onClick={onLogout}>
@@ -142,10 +282,21 @@ function SellerDashboard({ role, onLogout }: { role: UserRole; onLogout: () => v
           <div>
             <span>{isAdmin ? 'admin workspace' : 'seller workspace'}</span>
             <h1>{isAdmin ? '관리자 운영 현황' : '판매 현황'}</h1>
+            {profile && <p className="seller-approval">승인상태: {profile.approvalStatus}</p>}
           </div>
           <button type="button">공지사항</button>
         </header>
 
+        {isLoading && <div className="seller-panel">판매자센터 정보를 불러오고 있습니다.</div>}
+        {errorMessage && <div className="seller-panel seller-error">{errorMessage}</div>}
+        {!isLoading && !errorMessage && isPending && (
+          <section className="seller-panel seller-pending">
+            <h2>판매자 승인 대기 중입니다</h2>
+            <p>관리자 승인 후 상품관리, 주문관리, 매출관리 기능을 사용할 수 있습니다.</p>
+          </section>
+        )}
+        {!isLoading && !errorMessage && !isPending && (
+          <>
         <section className="seller-summary-grid" aria-label="주문 처리 현황">
           {summaryCards.map((card) => (
             <article key={card.label} className="seller-summary-card">
@@ -156,6 +307,7 @@ function SellerDashboard({ role, onLogout }: { role: UserRole; onLogout: () => v
           ))}
         </section>
 
+        {activeMenu === 'dashboard' && (
         <section className="seller-dashboard-grid">
           <article className="seller-panel seller-panel-wide">
             <div className="seller-panel-heading">
@@ -175,15 +327,17 @@ function SellerDashboard({ role, onLogout }: { role: UserRole; onLogout: () => v
 
           <article className="seller-panel">
             <h2>미답변 문의</h2>
-            <div className="empty-seller-state">등록된 문의가 없습니다.</div>
+            <div className="empty-seller-state">
+              {inquiries.length === 0 ? '등록된 문의가 없습니다.' : `${inquiries.length}건의 문의가 있습니다.`}
+            </div>
           </article>
 
           <article className="seller-panel">
             <h2>공지사항</h2>
             <ul className="notice-list">
-              <li>판매자 운영 정책 안내</li>
-              <li>정산 기준 및 배송 정책 확인</li>
-              <li>상품 이미지 등록 가이드</li>
+              {(dashboard?.notices ?? []).map((notice) => (
+                <li key={notice}>{notice}</li>
+              ))}
             </ul>
           </article>
 
@@ -199,6 +353,76 @@ function SellerDashboard({ role, onLogout }: { role: UserRole; onLogout: () => v
             </div>
           </article>
         </section>
+        )}
+
+        {activeMenu === 'products' && (
+          <section className="seller-panel">
+            <h2>상품관리</h2>
+            <div className="seller-table">
+              {products.map((product) => (
+                <div key={product.id} className="seller-table-row">
+                  <span>{product.name}</span>
+                  <strong>{product.price.toLocaleString()}원</strong>
+                  <em>재고 {product.stock}</em>
+                  <small>{product.status}</small>
+                </div>
+              ))}
+              {products.length === 0 && <div className="empty-seller-state">등록된 상품이 없습니다.</div>}
+            </div>
+          </section>
+        )}
+
+        {activeMenu === 'orders' && (
+          <section className="seller-panel">
+            <h2>주문관리</h2>
+            <div className="seller-table">
+              {orders.map((order) => (
+                <div key={order.id} className="seller-table-row">
+                  <span>{order.orderNumber}</span>
+                  <strong>{order.totalPrice.toLocaleString()}원</strong>
+                  <em>{order.receiverName}</em>
+                  <small>{order.status}</small>
+                </div>
+              ))}
+              {orders.length === 0 && <div className="empty-seller-state">주문 내역이 없습니다.</div>}
+            </div>
+          </section>
+        )}
+
+        {activeMenu === 'sales' && (
+          <section className="seller-panel">
+            <h2>매출관리</h2>
+            <div className="sales-stat-grid">
+              {salesStats.map((stat) => (
+                <div key={stat.label}>
+                  <span>{stat.label}</span>
+                  <strong>{stat.value}</strong>
+                </div>
+              ))}
+              <div>
+                <span>평균 주문 금액</span>
+                <strong>{(sales?.averageOrderAmount ?? 0).toLocaleString()}원</strong>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeMenu === 'inquiries' && (
+          <section className="seller-panel">
+            <h2>문의관리</h2>
+            <div className="seller-table">
+              {inquiries.map((inquiry) => (
+                <div key={inquiry.id} className="seller-table-row">
+                  <span>{inquiry.title}</span>
+                  <small>{inquiry.status}</small>
+                </div>
+              ))}
+              {inquiries.length === 0 && <div className="empty-seller-state">등록된 문의가 없습니다.</div>}
+            </div>
+          </section>
+        )}
+          </>
+        )}
       </section>
     </section>
   )
