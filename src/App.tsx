@@ -164,7 +164,16 @@ type SellerInquiryResponse = {
   status: string
 }
 
-type SellerMenu = 'dashboard' | 'products' | 'orders' | 'sales' | 'inquiries'
+type AdminSellerResponse = {
+  id: number
+  memberId: number
+  loginId: string
+  email: string
+  storeName: string
+  approvalStatus: 'PENDING' | 'APPROVED' | 'SUSPENDED'
+}
+
+type SellerMenu = 'dashboard' | 'products' | 'orders' | 'sales' | 'inquiries' | 'seller-approvals'
 
 function SellerDashboard({ role, onLogout }: { role: UserRole; onLogout: () => void }) {
   const isAdmin = role === 'ADMIN'
@@ -176,22 +185,26 @@ function SellerDashboard({ role, onLogout }: { role: UserRole; onLogout: () => v
   const [orders, setOrders] = useState<SellerOrderResponse[]>([])
   const [sales, setSales] = useState<SellerSalesResponse | null>(null)
   const [inquiries, setInquiries] = useState<SellerInquiryResponse[]>([])
+  const [adminSellers, setAdminSellers] = useState<AdminSellerResponse[]>([])
 
-  const sellerMenus: Array<{ id: SellerMenu; label: string }> = [
-    { id: 'dashboard', label: '대시보드' },
-    { id: 'products', label: '상품관리' },
-    { id: 'orders', label: '주문관리' },
-    { id: 'sales', label: '매출관리' },
-    { id: 'inquiries', label: '문의관리' },
-  ]
+  const sellerMenus: Array<{ id: SellerMenu; label: string }> = isAdmin
+    ? [{ id: 'seller-approvals', label: '판매자 승인' }]
+    : [
+        { id: 'dashboard', label: '대시보드' },
+        { id: 'products', label: '상품관리' },
+        { id: 'orders', label: '주문관리' },
+        { id: 'sales', label: '매출관리' },
+        { id: 'inquiries', label: '문의관리' },
+      ]
 
   useEffect(() => {
     const controller = new AbortController()
 
-    async function fetchSellerResource<T>(path: string): Promise<T> {
+    async function fetchAuthorizedResource<T>(path: string, options?: RequestInit): Promise<T> {
       const accessToken = localStorage.getItem('accessToken')
 
       const response = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
         signal: controller.signal,
       })
@@ -203,17 +216,35 @@ function SellerDashboard({ role, onLogout }: { role: UserRole; onLogout: () => v
       return response.json() as Promise<T>
     }
 
+    async function loadAdminCenter() {
+      setIsLoading(true)
+      setErrorMessage('')
+      setActiveMenu('seller-approvals')
+
+      try {
+        const sellers = await fetchAuthorizedResource<AdminSellerResponse[]>('/admin/sellers')
+        setAdminSellers(sellers)
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        setErrorMessage(error instanceof Error ? error.message : '관리자 정보를 불러오지 못했습니다.')
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
     async function loadSellerCenter() {
       setIsLoading(true)
       setErrorMessage('')
 
       try {
         const [dashboardData, productData, orderData, salesData, inquiryData] = await Promise.all([
-          fetchSellerResource<SellerDashboardResponse>('/seller-center/dashboard'),
-          fetchSellerResource<SellerProductResponse[]>('/seller-center/products'),
-          fetchSellerResource<SellerOrderResponse[]>('/seller-center/orders'),
-          fetchSellerResource<SellerSalesResponse>('/seller-center/sales'),
-          fetchSellerResource<SellerInquiryResponse[]>('/seller-center/inquiries'),
+          fetchAuthorizedResource<SellerDashboardResponse>('/seller-center/dashboard'),
+          fetchAuthorizedResource<SellerProductResponse[]>('/seller-center/products'),
+          fetchAuthorizedResource<SellerOrderResponse[]>('/seller-center/orders'),
+          fetchAuthorizedResource<SellerSalesResponse>('/seller-center/sales'),
+          fetchAuthorizedResource<SellerInquiryResponse[]>('/seller-center/inquiries'),
         ])
 
         setDashboard(dashboardData)
@@ -231,10 +262,36 @@ function SellerDashboard({ role, onLogout }: { role: UserRole; onLogout: () => v
       }
     }
 
-    loadSellerCenter()
+    if (isAdmin) {
+      loadAdminCenter()
+    } else {
+      loadSellerCenter()
+    }
 
     return () => controller.abort()
-  }, [])
+  }, [isAdmin])
+
+  async function updateSellerApproval(sellerProfileId: number, action: 'approve' | 'suspend') {
+    const accessToken = localStorage.getItem('accessToken')
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/sellers/${sellerProfileId}/${action}`, {
+        method: 'PATCH',
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      })
+
+      if (!response.ok) {
+        throw new Error(await readApiResponseMessage(response))
+      }
+
+      const updatedSeller = (await response.json()) as AdminSellerResponse
+      setAdminSellers((sellers) =>
+        sellers.map((seller) => (seller.id === updatedSeller.id ? updatedSeller : seller)),
+      )
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '판매자 승인 상태 변경에 실패했습니다.')
+    }
+  }
 
   const profile = dashboard?.profile
   const isPending = profile?.approvalStatus === 'PENDING'
@@ -289,13 +346,44 @@ function SellerDashboard({ role, onLogout }: { role: UserRole; onLogout: () => v
 
         {isLoading && <div className="seller-panel">판매자센터 정보를 불러오고 있습니다.</div>}
         {errorMessage && <div className="seller-panel seller-error">{errorMessage}</div>}
-        {!isLoading && !errorMessage && isPending && (
+        {!isLoading && !errorMessage && isAdmin && (
+          <section className="seller-panel">
+            <h2>판매자 승인 관리</h2>
+            <div className="seller-table seller-approval-table">
+              {adminSellers.map((seller) => (
+                <div key={seller.id} className="seller-table-row seller-approval-row">
+                  <span>{seller.storeName}</span>
+                  <strong>{seller.loginId}</strong>
+                  <em>{seller.approvalStatus}</em>
+                  <div className="seller-row-actions">
+                    <button
+                      type="button"
+                      disabled={seller.approvalStatus === 'APPROVED'}
+                      onClick={() => updateSellerApproval(seller.id, 'approve')}
+                    >
+                      승인
+                    </button>
+                    <button
+                      type="button"
+                      disabled={seller.approvalStatus === 'SUSPENDED'}
+                      onClick={() => updateSellerApproval(seller.id, 'suspend')}
+                    >
+                      정지
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {adminSellers.length === 0 && <div className="empty-seller-state">판매자 신청 내역이 없습니다.</div>}
+            </div>
+          </section>
+        )}
+        {!isLoading && !errorMessage && !isAdmin && isPending && (
           <section className="seller-panel seller-pending">
             <h2>판매자 승인 대기 중입니다</h2>
             <p>관리자 승인 후 상품관리, 주문관리, 매출관리 기능을 사용할 수 있습니다.</p>
           </section>
         )}
-        {!isLoading && !errorMessage && !isPending && (
+        {!isLoading && !errorMessage && !isAdmin && !isPending && (
           <>
         <section className="seller-summary-grid" aria-label="주문 처리 현황">
           {summaryCards.map((card) => (

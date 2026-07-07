@@ -1168,6 +1168,33 @@ input {
   font-style: normal;
 }
 
+.seller-approval-row {
+  grid-template-columns: minmax(0, 1.5fr) 140px 120px 160px;
+}
+
+.seller-row-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.seller-row-actions button {
+  min-width: 62px;
+  border: 1px solid #dce3e8;
+  background: #ffffff;
+}
+
+.seller-row-actions button:first-child {
+  border-color: #19b36b;
+  background: #19b36b;
+  color: #ffffff;
+}
+
+.seller-row-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 @media (max-width: 1080px) {
   .site-header {
     grid-template-columns: 1fr;
