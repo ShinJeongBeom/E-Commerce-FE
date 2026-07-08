@@ -294,7 +294,13 @@ function SellerDashboard({ role, onLogout }: { role: UserRole; onLogout: () => v
   }
 
   const profile = dashboard?.profile
-  const isPending = profile?.approvalStatus === 'PENDING'
+  const isSellerRestricted = profile?.approvalStatus !== 'APPROVED'
+  const restrictedTitle =
+    profile?.approvalStatus === 'SUSPENDED' ? '판매자 계정이 정지되었습니다' : '판매자 승인 대기 중입니다'
+  const restrictedMessage =
+    profile?.approvalStatus === 'SUSPENDED'
+      ? '관리자 확인 후 상품관리, 주문관리, 매출관리 기능을 다시 사용할 수 있습니다.'
+      : '관리자 승인 후 상품관리, 주문관리, 매출관리 기능을 사용할 수 있습니다.'
   const summaryCards = [
     { label: '입금대기', value: dashboard?.waitingPaymentCount ?? 0, helper: '신규 주문' },
     { label: '배송준비', value: dashboard?.preparingDeliveryCount ?? 0, helper: '배송 전' },
@@ -377,13 +383,13 @@ function SellerDashboard({ role, onLogout }: { role: UserRole; onLogout: () => v
             </div>
           </section>
         )}
-        {!isLoading && !errorMessage && !isAdmin && isPending && (
+        {!isLoading && !errorMessage && !isAdmin && isSellerRestricted && (
           <section className="seller-panel seller-pending">
-            <h2>판매자 승인 대기 중입니다</h2>
-            <p>관리자 승인 후 상품관리, 주문관리, 매출관리 기능을 사용할 수 있습니다.</p>
+            <h2>{restrictedTitle}</h2>
+            <p>{restrictedMessage}</p>
           </section>
         )}
-        {!isLoading && !errorMessage && !isAdmin && !isPending && (
+        {!isLoading && !errorMessage && !isAdmin && !isSellerRestricted && (
           <>
         <section className="seller-summary-grid" aria-label="주문 처리 현황">
           {summaryCards.map((card) => (
