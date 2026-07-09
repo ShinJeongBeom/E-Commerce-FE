@@ -958,6 +958,14 @@ input {
   gap: 14px;
 }
 
+.admin-marketplace-panel {
+  grid-column: 1 / -1;
+}
+
+.admin-marketplace-panel .admin-stat-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .admin-panel h2 {
   margin: 0 0 18px;
   font-size: 22px;
@@ -1048,6 +1056,67 @@ input {
   margin-top: 18px;
 }
 
+.admin-section-panel {
+  margin-top: 18px;
+  border: 1px solid #d9ded9;
+  border-radius: 8px;
+  padding: 24px;
+  background: #ffffff;
+}
+
+.admin-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #d9ded9;
+}
+
+.admin-section-heading span {
+  color: #697267;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-section-heading h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.admin-section-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.admin-section-grid article {
+  display: grid;
+  gap: 8px;
+  min-height: 128px;
+  padding: 18px;
+  border: 1px solid #e3e7e3;
+  border-radius: 8px;
+  background: #f8faf8;
+}
+
+.admin-section-grid span {
+  color: #697267;
+  font-weight: 800;
+}
+
+.admin-section-grid strong {
+  color: #272b30;
+  font-size: 24px;
+}
+
+.admin-section-grid p {
+  margin: 0;
+  color: #697267;
+  line-height: 1.5;
+}
+
 .admin-board-heading {
   display: flex;
   align-items: center;
@@ -1115,7 +1184,9 @@ input {
   .product-detail,
   .cart-layout,
   .admin-overview-grid,
-  .admin-board-grid {
+  .admin-board-grid,
+  .admin-section-grid,
+  .admin-marketplace-panel .admin-stat-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1184,7 +1255,9 @@ input {
 
   .admin-nav,
   .admin-quick-grid,
-  .admin-stat-grid {
+  .admin-stat-grid,
+  .admin-section-grid,
+  .admin-marketplace-panel .admin-stat-grid {
     grid-template-columns: 1fr;
   }
 

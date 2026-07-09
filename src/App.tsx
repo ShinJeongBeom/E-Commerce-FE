@@ -6,6 +6,7 @@ type Category = 'all' | 'echeveria' | 'haworthia' | 'lithops' | 'sale'
 type View = 'home' | 'shop' | 'auth' | 'admin'
 type AuthMode = 'login' | 'signup'
 type UserRole = 'USER' | 'SELLER' | 'ADMIN'
+type AdminSectionId = 'orders' | 'boards' | 'members' | 'main-products' | 'banners' | 'products' | 'statistics' | 'policies'
 
 type Product = {
   id: number
@@ -44,6 +45,7 @@ type AdminDashboardResponse = {
   quickMenus: AdminQuickMenu[]
   todayStatus: AdminTodayStatus
   pendingStatus: AdminPendingStatus
+  marketplaceStatus: AdminMarketplaceStatus
   improvementPosts: AdminBoardPost[]
   manualPosts: AdminBoardPost[]
 }
@@ -57,7 +59,6 @@ type AdminTodayStatus = {
   memberSignupCount: number
   memberWithdrawalCount: number
   productCreatedCount: number
-  pageViewCount: number
   orderCount: number
 }
 
@@ -68,6 +69,20 @@ type AdminPendingStatus = {
   productInquiryCount: number
   sellerApprovalCount: number
   orderProcessingCount: number
+}
+
+type AdminMarketplaceStatus = {
+  sellerApprovalWaitingCount: number
+  todaySellerSignupCount: number
+  settlementPendingAmount: number
+  reportedProductCount: number
+  reportedReviewCount: number
+  suspendedProductCount: number
+}
+
+type AdminMenu = {
+  id: AdminSectionId
+  label: string
 }
 
 type AdminBoardPost = {
@@ -176,6 +191,17 @@ const categoryLabels: Record<Category, string> = {
   sale: '세일',
 }
 
+const adminMenus: AdminMenu[] = [
+  { id: 'orders', label: '주문 관리' },
+  { id: 'boards', label: '게시판 관리' },
+  { id: 'members', label: '회원 관리' },
+  { id: 'main-products', label: '메인 상품 관리' },
+  { id: 'banners', label: '배너 관리' },
+  { id: 'products', label: '상품 관리' },
+  { id: 'statistics', label: '통계' },
+  { id: 'policies', label: '기본 정책 관리' },
+]
+
 async function readApiResponseMessage(response: Response) {
   const contentType = response.headers.get('content-type') ?? ''
 
@@ -188,8 +214,9 @@ async function readApiResponseMessage(response: Response) {
   return text || '요청 처리에 실패했습니다.'
 }
 
-function AdminDashboard({ onLogout }: { onLogout: () => void }) {
+function AdminDashboard({ onLogout, onOpenUserView }: { onLogout: () => void; onOpenUserView: () => void }) {
   const [dashboard, setDashboard] = useState<AdminDashboardResponse | null>(null)
+  const [activeSection, setActiveSection] = useState<AdminSectionId>('orders')
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -231,7 +258,6 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     { label: '회원 가입', value: dashboard?.todayStatus.memberSignupCount ?? 0, unit: '명' },
     { label: '회원 탈퇴', value: dashboard?.todayStatus.memberWithdrawalCount ?? 0, unit: '명' },
     { label: '상품 등록건', value: dashboard?.todayStatus.productCreatedCount ?? 0, unit: '건' },
-    { label: '페이지 뷰', value: dashboard?.todayStatus.pageViewCount ?? 0, unit: '건' },
     { label: '주문 건', value: dashboard?.todayStatus.orderCount ?? 0, unit: '건' },
   ]
 
@@ -244,7 +270,16 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     { label: '주문 처리', value: dashboard?.pendingStatus.orderProcessingCount ?? 0 },
   ]
 
-  const navItems = ['주문 관리', '게시판 관리', '회원 관리', '메인 상품 관리', '배너 관리', '상품 관리', '통계', '기본 정책 관리']
+  const marketplaceCards = [
+    { label: '판매자 승인 대기', value: dashboard?.marketplaceStatus.sellerApprovalWaitingCount ?? 0, unit: '건' },
+    { label: '오늘 신규 판매자 가입', value: dashboard?.marketplaceStatus.todaySellerSignupCount ?? 0, unit: '명' },
+    { label: '정산 대기 금액', value: dashboard?.marketplaceStatus.settlementPendingAmount ?? 0, unit: '원', isMoney: true },
+    { label: '신고된 상품', value: dashboard?.marketplaceStatus.reportedProductCount ?? 0, unit: '건' },
+    { label: '신고된 리뷰', value: dashboard?.marketplaceStatus.reportedReviewCount ?? 0, unit: '건' },
+    { label: '판매 중지 상품', value: dashboard?.marketplaceStatus.suspendedProductCount ?? 0, unit: '개' },
+  ]
+
+  const activeMenu = adminMenus.find((menu) => menu.id === activeSection) ?? adminMenus[0]
 
   return (
     <main className="admin-console">
@@ -255,7 +290,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
           <p>{dashboard ? `${dashboard.loginId} 관리자` : '관리자 정보를 확인 중입니다.'}</p>
         </div>
         <div className="admin-header-actions">
-          <button type="button" onClick={() => window.alert('사용자 화면 이동은 다음 단계에서 연결합니다.')}>
+          <button type="button" onClick={onOpenUserView}>
             이용자 화면 보기
           </button>
           <button type="button" onClick={() => window.alert('사내 게시판은 다음 단계에서 연결합니다.')}>
@@ -268,9 +303,14 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       </header>
 
       <nav className="admin-nav" aria-label="관리자 메뉴">
-        {navItems.map((item, index) => (
-          <button key={item} type="button" className={index === 0 ? 'is-active' : ''}>
-            {item}
+        {adminMenus.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={activeSection === item.id ? 'is-active' : ''}
+            onClick={() => setActiveSection(item.id)}
+          >
+            {item.label}
           </button>
         ))}
       </nav>
@@ -287,7 +327,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                 <h3>자주 이용하는 메뉴</h3>
                 <div className="admin-quick-grid">
                   {dashboard.quickMenus.map((menu) => (
-                    <button key={menu.target} type="button">
+                    <button key={menu.target} type="button" onClick={() => setActiveSection(toAdminSection(menu.target))}>
                       {menu.label}
                     </button>
                   ))}
@@ -323,6 +363,26 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                 ))}
               </div>
             </article>
+
+            <article className="admin-panel admin-marketplace-panel">
+              <h2>오픈마켓 운영 지표</h2>
+              <div className="admin-stat-grid">
+                {marketplaceCards.map((card) => (
+                  <div key={card.label}>
+                    <span>{card.label}</span>
+                    <strong>{formatAdminMetric(card.value, card.unit, card.isMoney)}</strong>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+
+          <section className="admin-section-panel">
+            <div className="admin-section-heading">
+              <span>관리 메뉴</span>
+              <h2>{activeMenu.label}</h2>
+            </div>
+            <AdminSectionContent section={activeSection} dashboard={dashboard} />
           </section>
 
           <section className="admin-board-grid">
@@ -332,6 +392,74 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
         </>
       )}
     </main>
+  )
+}
+
+function toAdminSection(target: string): AdminSectionId {
+  if (target === 'policy') return 'policies'
+  if (target === 'statistics') return 'statistics'
+  if (target === 'products') return 'products'
+  return 'orders'
+}
+
+function formatAdminMetric(value: number, unit: string, isMoney = false) {
+  return `${value.toLocaleString()}${unit}${isMoney ? '' : ''}`
+}
+
+function AdminSectionContent({ section, dashboard }: { section: AdminSectionId; dashboard: AdminDashboardResponse }) {
+  const sectionRows: Record<AdminSectionId, { title: string; value: string; description: string }[]> = {
+    orders: [
+      { title: '오늘 주문', value: `${dashboard.todayStatus.orderCount.toLocaleString()}건`, description: '오늘 생성된 전체 주문 수' },
+      { title: '처리 대기 주문', value: `${dashboard.pendingStatus.orderProcessingCount.toLocaleString()}건`, description: '결제 완료 이후 배송 준비가 필요한 주문' },
+      { title: '교환/환불 신청', value: `${dashboard.pendingStatus.exchangeRefundCount.toLocaleString()}건`, description: '처리 전 교환 및 환불 요청' },
+    ],
+    boards: [
+      { title: '사내 개선 사항', value: `${dashboard.improvementPosts.length.toLocaleString()}건`, description: '운영자가 확인할 내부 개선 요청' },
+      { title: '업무 매뉴얼', value: `${dashboard.manualPosts.length.toLocaleString()}건`, description: '운영 처리 기준과 반복 업무 문서' },
+      { title: '1:1 문의', value: `${dashboard.pendingStatus.oneToOneInquiryCount.toLocaleString()}건`, description: '답변 대기 중인 고객 문의' },
+    ],
+    members: [
+      { title: '오늘 회원 가입', value: `${dashboard.todayStatus.memberSignupCount.toLocaleString()}명`, description: '오늘 신규 가입한 구매자와 판매자' },
+      { title: '오늘 회원 탈퇴', value: `${dashboard.todayStatus.memberWithdrawalCount.toLocaleString()}명`, description: '탈퇴 처리된 회원' },
+      { title: '판매자 승인 대기', value: `${dashboard.marketplaceStatus.sellerApprovalWaitingCount.toLocaleString()}건`, description: '관리자 승인이 필요한 판매자 신청' },
+    ],
+    'main-products': [
+      { title: '오늘 등록 상품', value: `${dashboard.todayStatus.productCreatedCount.toLocaleString()}건`, description: '오늘 신규 등록된 상품' },
+      { title: '판매 중지 상품', value: `${dashboard.marketplaceStatus.suspendedProductCount.toLocaleString()}개`, description: '숨김 또는 판매 중지 상태의 상품' },
+      { title: '신고된 상품', value: `${dashboard.marketplaceStatus.reportedProductCount.toLocaleString()}건`, description: '운영 검수가 필요한 상품 신고' },
+    ],
+    banners: [
+      { title: '메인 배너', value: '준비 중', description: '홈 화면 대표 배너 노출 관리' },
+      { title: '이벤트 배너', value: '준비 중', description: '이벤트와 기획전 배너 관리' },
+      { title: '노출 상태', value: '기본값', description: '배너 도메인 추가 후 실제 노출 상태 연동' },
+    ],
+    products: [
+      { title: '전체 상품 관리', value: `${dashboard.todayStatus.productCreatedCount.toLocaleString()}건`, description: '상품 등록, 수정, 판매 상태 검수' },
+      { title: '상품 문의', value: `${dashboard.pendingStatus.productInquiryCount.toLocaleString()}건`, description: '답변 대기 중인 상품 문의' },
+      { title: '신고된 리뷰', value: `${dashboard.marketplaceStatus.reportedReviewCount.toLocaleString()}건`, description: '운영 검수가 필요한 리뷰 신고' },
+    ],
+    statistics: [
+      { title: '오늘 주문', value: `${dashboard.todayStatus.orderCount.toLocaleString()}건`, description: '일간 주문 추이 확인 기준' },
+      { title: '정산 대기 금액', value: `${dashboard.marketplaceStatus.settlementPendingAmount.toLocaleString()}원`, description: '정산 처리 전 주문 금액 합계' },
+      { title: '오늘 신규 판매자', value: `${dashboard.marketplaceStatus.todaySellerSignupCount.toLocaleString()}명`, description: '오늘 판매자로 가입한 계정' },
+    ],
+    policies: [
+      { title: '판매 정책', value: '기본 정책', description: '상품 등록, 판매 중지, 검수 기준' },
+      { title: '정산 정책', value: '기본 정책', description: '정산 대기와 지급 기준' },
+      { title: '신고 처리 정책', value: '기본 정책', description: '상품과 리뷰 신고 처리 기준' },
+    ],
+  }
+
+  return (
+    <div className="admin-section-grid">
+      {sectionRows[section].map((row) => (
+        <article key={row.title}>
+          <span>{row.title}</span>
+          <strong>{row.value}</strong>
+          <p>{row.description}</p>
+        </article>
+      ))}
+    </div>
   )
 }
 
@@ -572,7 +700,7 @@ function App() {
   const productTotal = productPrice * quantity
 
   if (view === 'admin') {
-    return <AdminDashboard onLogout={logout} />
+    return <AdminDashboard onLogout={logout} onOpenUserView={() => setView('home')} />
   }
 
   return (
