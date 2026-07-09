@@ -357,6 +357,40 @@
   color: #6f6a5e;
 }
 
+.role-select {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.role-select legend {
+  grid-column: 1 / -1;
+  margin-bottom: 2px;
+  color: #3f3a31;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.role-select label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  border: 1px solid #d8cec0;
+  border-radius: 6px;
+  padding: 0 12px;
+  background: #fff;
+}
+
+.role-select input,
+.settings-toggle input {
+  width: auto;
+  height: auto;
+}
+
 .carousel-card h2 {
   margin: 8px 0;
   font-family: Georgia, 'Times New Roman', serif;
@@ -527,9 +561,16 @@
 .category-band p,
 .section-heading p,
 .empty-message,
+.product-message,
 .cart-item p,
 .info-list dd {
   color: #6f6a5e;
+}
+
+.product-message {
+  margin: 10px 0 0;
+  color: #9f4b34;
+  font-weight: 800;
 }
 
 .category-buttons {
@@ -849,6 +890,166 @@ input {
 .footer-actions button {
   border-color: #ede8dc;
   background: transparent;
+}
+
+.role-page {
+  display: grid;
+  gap: 20px;
+  min-height: 100vh;
+  padding: 42px 36px 80px;
+  background: #fbfaf6;
+}
+
+.role-page-seller {
+  background: #f4f6f4;
+}
+
+.role-page-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 18px;
+  border: 1px solid #e2d8ca;
+  border-radius: 8px;
+  padding: 24px;
+  background: #fff;
+}
+
+.role-page-heading span {
+  color: #6f7e4f;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.role-page-heading h1 {
+  margin: 8px 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 42px;
+  font-weight: 500;
+}
+
+.role-page-heading p,
+.role-panel p,
+.role-message,
+.settings-list dd {
+  margin: 0;
+  color: #6f6a5e;
+}
+
+.role-page-heading button,
+.role-panel button,
+.role-action-grid button {
+  min-height: 42px;
+  border: 1px solid #314932;
+  border-radius: 6px;
+  padding: 0 16px;
+  background: #314932;
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.role-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.role-stat-grid article,
+.role-panel {
+  border: 1px solid #e2d8ca;
+  border-radius: 8px;
+  padding: 20px;
+  background: #fff;
+}
+
+.role-stat-grid article {
+  display: grid;
+  gap: 10px;
+}
+
+.role-stat-grid span {
+  color: #6f6a5e;
+  font-weight: 800;
+}
+
+.role-stat-grid strong {
+  font-size: 26px;
+}
+
+.role-two-column {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.role-panel {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.role-panel h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.role-action-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.role-action-grid button {
+  background: #fff;
+  color: #314932;
+}
+
+.role-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.role-list li,
+.settings-list div,
+.settings-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid #eee7dd;
+  padding: 10px 0;
+}
+
+.role-list li:last-child,
+.settings-list div:last-child {
+  border-bottom: 0;
+}
+
+.role-list span {
+  font-weight: 800;
+}
+
+.role-message-error {
+  color: #9f4b34;
+  font-weight: 800;
+}
+
+.settings-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.settings-list dt,
+.settings-toggle {
+  color: #3f3a31;
+  font-weight: 800;
 }
 
 .admin-console {
@@ -1299,6 +1500,7 @@ input {
   .product-browser,
   .product-detail,
   .cart-layout,
+  .role-two-column,
   .admin-overview-grid,
   .admin-board-grid,
   .admin-section-grid,
@@ -1313,6 +1515,11 @@ input {
   .product-list {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
+
+  .role-stat-grid,
+  .role-action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 680px) {
@@ -1323,6 +1530,7 @@ input {
   .product-browser,
   .cart-section,
   .site-footer,
+  .role-page,
   .admin-console {
     padding-left: 18px;
     padding-right: 18px;
@@ -1352,11 +1560,13 @@ input {
   }
 
   .admin-header,
-  .admin-board li {
+  .admin-board li,
+  .role-page-heading {
     grid-template-columns: 1fr;
   }
 
-  .admin-header {
+  .admin-header,
+  .role-page-heading {
     display: grid;
   }
 
@@ -1373,6 +1583,9 @@ input {
   .admin-quick-grid,
   .admin-stat-grid,
   .admin-section-grid,
+  .role-stat-grid,
+  .role-action-grid,
+  .role-select,
   .admin-marketplace-panel .admin-stat-grid {
     grid-template-columns: 1fr;
   }

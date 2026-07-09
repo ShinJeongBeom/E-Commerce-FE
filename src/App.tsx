@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import './App.css'
 
-type Category = 'all' | 'echeveria' | 'haworthia' | 'lithops' | 'sale'
-type View = 'home' | 'shop' | 'auth' | 'admin'
+type Category = 'all' | 'plants' | 'pots' | 'tools' | 'sale'
+type View = 'home' | 'shop' | 'auth' | 'admin' | 'seller' | 'mypage' | 'settings'
 type AuthMode = 'login' | 'signup'
 type UserRole = 'USER' | 'SELLER' | 'ADMIN'
 type AdminSectionId = 'orders' | 'boards' | 'members' | 'main-products' | 'banners' | 'products' | 'statistics' | 'policies' | 'audit'
@@ -21,6 +21,21 @@ type Product = {
   images: string[]
 }
 
+type ProductApiResponse = {
+  id: number
+  name: string
+  plantType?: string | null
+  careLevel?: string | null
+  lightRequirement?: string | null
+  wateringCycle?: string | null
+  imageUrl?: string | null
+  potIncluded?: string | null
+  description?: string | null
+  price: number
+  stock: number
+  status?: string | null
+}
+
 type CartItem = {
   product: Product
   quantity: number
@@ -32,6 +47,7 @@ type SignupForm = {
   loginId: string
   password: string
   passwordConfirm: string
+  role: Exclude<UserRole, 'ADMIN'>
   address: string
   addressDetail: string
   phone: string
@@ -197,13 +213,34 @@ type AdminPage<T> = {
   totalPages: number
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
+type SellerProfileResponse = {
+  sellerProfileId: number
+  storeName: string
+  approvalStatus: string
+}
 
-const products: Product[] = [
+type SellerDashboardResponse = {
+  profile: SellerProfileResponse
+  waitingPaymentCount: number
+  preparingDeliveryCount: number
+  cancelledOrderCount: number
+  todaySettlementAmount: number
+  todaySalesAmount: number
+  monthlySalesAmount: number
+  orderCount: number
+  productCount: number
+  notices: string[]
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
+const FALLBACK_IMAGE =
+  'https://images.unsplash.com/photo-1459411621453-7b03977f4bfc?auto=format&fit=crop&w=900&q=80'
+
+const fallbackProducts: Product[] = [
   {
     id: 1,
     name: '방울복랑금',
-    category: 'echeveria',
+    category: 'plants',
     price: 12000,
     salePrice: 9900,
     deliveryFee: 3000,
@@ -221,7 +258,7 @@ const products: Product[] = [
   {
     id: 2,
     name: '에케베리아 라우이',
-    category: 'echeveria',
+    category: 'plants',
     price: 18000,
     deliveryFee: 3000,
     shortInfo: '분가루가 고운 로제트형 다육',
@@ -238,7 +275,7 @@ const products: Product[] = [
   {
     id: 3,
     name: '하월시아 옵투사',
-    category: 'haworthia',
+    category: 'plants',
     price: 15000,
     salePrice: 12900,
     deliveryFee: 3000,
@@ -256,7 +293,7 @@ const products: Product[] = [
   {
     id: 4,
     name: '리톱스 믹스',
-    category: 'lithops',
+    category: 'plants',
     price: 9000,
     deliveryFee: 3000,
     shortInfo: '작고 독특한 돌멩이 모양 다육',
@@ -273,7 +310,7 @@ const products: Product[] = [
   {
     id: 5,
     name: '세덤 모건뷰티',
-    category: 'echeveria',
+    category: 'plants',
     price: 11000,
     deliveryFee: 3000,
     shortInfo: '통통한 잎과 은은한 색감의 데일리 다육',
@@ -287,13 +324,39 @@ const products: Product[] = [
       'https://images.unsplash.com/photo-1533038590840-1cde6e668a91?auto=format&fit=crop&w=900&q=80',
     ],
   },
+  {
+    id: 9001,
+    name: '토분 베이직 10cm',
+    category: 'pots',
+    price: 6500,
+    deliveryFee: 3000,
+    shortInfo: '통기성이 좋아 다육식물 분갈이에 쓰기 좋은 기본 토분',
+    detail: '물마름이 빠른 편이라 과습에 약한 다육식물과 잘 맞습니다. 받침과 함께 사용하면 실내 관리가 쉽습니다.',
+    tags: ['화분', '토분', '분갈이', '통기성'],
+    images: [
+      'https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=900&q=80',
+    ],
+  },
+  {
+    id: 9002,
+    name: '다육 전용 배양토',
+    category: 'tools',
+    price: 7900,
+    deliveryFee: 3000,
+    shortInfo: '마사와 펄라이트가 섞인 배수 중심의 다육 전용 흙',
+    detail: '뿌리 과습을 줄이고 통풍을 돕는 배합입니다. 분갈이와 삽목용으로 함께 사용할 수 있습니다.',
+    tags: ['보조도구', '배양토', '흙', '분갈이', '배수'],
+    images: [
+      'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=900&q=80',
+    ],
+  },
 ]
 
 const categoryLabels: Record<Category, string> = {
   all: '전체',
-  echeveria: '에케베리아',
-  haworthia: '하월시아',
-  lithops: '리톱스',
+  plants: '다육식물',
+  pots: '화분',
+  tools: '보조도구',
   sale: '세일',
 }
 
@@ -321,6 +384,20 @@ async function readApiResponseMessage(response: Response) {
   return text || '요청 처리에 실패했습니다.'
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+
+function isFetchNetworkError(error: unknown) {
+  return error instanceof TypeError && error.message.toLowerCase().includes('fetch')
+}
+
+function wait(milliseconds: number) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds)
+  })
+}
+
 async function adminFetch<T>(path: string, options: RequestInit = {}) {
   const accessToken = localStorage.getItem('accessToken')
   const headers = new Headers(options.headers)
@@ -333,10 +410,32 @@ async function adminFetch<T>(path: string, options: RequestInit = {}) {
     headers.set('Content-Type', 'application/json')
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  })
+  let response: Response
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+    })
+  } catch (error) {
+    if (isAbortError(error)) throw error
+    if (isFetchNetworkError(error)) {
+      await wait(250)
+      try {
+        response = await fetch(`${API_BASE_URL}${path}`, {
+          ...options,
+          headers,
+        })
+      } catch (retryError) {
+        if (isAbortError(retryError)) throw retryError
+        throw new Error('백엔드 서버 연결에 실패했습니다. 서버 실행 상태와 로그인 토큰을 확인해주세요.', {
+          cause: retryError,
+        })
+      }
+    } else {
+      throw error
+    }
+  }
 
   if (!response.ok) {
     throw new Error(await readApiResponseMessage(response))
@@ -350,6 +449,112 @@ async function adminFetch<T>(path: string, options: RequestInit = {}) {
   return (text ? JSON.parse(text) : undefined) as T
 }
 
+async function authFetch<T>(path: string, options: RequestInit = {}) {
+  const accessToken = localStorage.getItem('accessToken')
+  const headers = new Headers(options.headers)
+
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`)
+  }
+
+  if (options.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+
+  let response: Response
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+    })
+  } catch (error) {
+    if (isAbortError(error)) throw error
+    if (isFetchNetworkError(error)) {
+      await wait(250)
+      try {
+        response = await fetch(`${API_BASE_URL}${path}`, {
+          ...options,
+          headers,
+        })
+      } catch (retryError) {
+        if (isAbortError(retryError)) throw retryError
+        throw new Error('백엔드 서버 연결에 실패했습니다. 서버 실행 상태와 로그인 토큰을 확인해주세요.', {
+          cause: retryError,
+        })
+      }
+    } else {
+      throw error
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(await readApiResponseMessage(response))
+  }
+
+  const text = await response.text()
+  return (text ? JSON.parse(text) : undefined) as T
+}
+
+function resolveProductCategory(product: ProductApiResponse): Product['category'] {
+  const source = [product.name, product.plantType, product.description, product.potIncluded]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  if (source.includes('화분') || source.includes('pot')) return 'pots'
+  if (
+    source.includes('도구') ||
+    source.includes('흙') ||
+    source.includes('배양토') ||
+    source.includes('분갈이') ||
+    source.includes('tool') ||
+    source.includes('soil')
+  ) {
+    return 'tools'
+  }
+
+  return 'plants'
+}
+
+function toStorefrontProduct(product: ProductApiResponse): Product {
+  const tags = [
+    product.plantType,
+    product.careLevel,
+    product.lightRequirement,
+    product.wateringCycle,
+    product.potIncluded,
+    product.status,
+  ].filter((tag): tag is string => Boolean(tag))
+
+  return {
+    id: product.id,
+    name: product.name,
+    category: resolveProductCategory(product),
+    price: product.price,
+    deliveryFee: 3000,
+    shortInfo: product.description || product.plantType || '꽃동산에서 판매 중인 식물 상품입니다.',
+    detail: product.description || '상품 상세 설명은 준비 중입니다.',
+    tags: tags.length > 0 ? tags : ['식물상품'],
+    images: [product.imageUrl || FALLBACK_IMAGE],
+  }
+}
+
+function matchesProductKeyword(product: Product, keyword: string) {
+  if (!keyword) return true
+
+  return [
+    product.name,
+    categoryLabels[product.category],
+    product.shortInfo,
+    product.detail,
+    product.tags.join(' '),
+  ]
+    .join(' ')
+    .toLowerCase()
+    .includes(keyword)
+}
+
 function AdminDashboard({ onLogout, onOpenUserView }: { onLogout: () => void; onOpenUserView: () => void }) {
   const [dashboard, setDashboard] = useState<AdminDashboardResponse | null>(null)
   const [activeSection, setActiveSection] = useState<AdminSectionId>('orders')
@@ -361,19 +566,9 @@ function AdminDashboard({ onLogout, onOpenUserView }: { onLogout: () => void; on
     setErrorMessage('')
 
     try {
-      const accessToken = localStorage.getItem('accessToken')
-      const response = await fetch(`${API_BASE_URL}/admin/dashboard`, {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-        signal,
-      })
-
-      if (!response.ok) {
-        throw new Error(await readApiResponseMessage(response))
-      }
-
-      setDashboard((await response.json()) as AdminDashboardResponse)
+      setDashboard(await adminFetch<AdminDashboardResponse>('/admin/dashboard', { signal }))
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return
+      if (isAbortError(error)) return
       setErrorMessage(error instanceof Error ? error.message : '관리자 메인 정보를 불러오지 못했습니다.')
     } finally {
       if (!signal?.aborted) {
@@ -1142,6 +1337,275 @@ function AdminBoard({ title, posts }: { title: string; posts: AdminBoardPost[] }
   )
 }
 
+function SellerCenterPage({ onBack }: { onBack: () => void }) {
+  const [dashboard, setDashboard] = useState<SellerDashboardResponse | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    authFetch<SellerDashboardResponse>('/seller-center/dashboard', { signal: controller.signal })
+      .then((data) => {
+        setDashboard(data)
+        setMessage('')
+      })
+      .catch((error) => {
+        if (isAbortError(error)) return
+        setMessage(error instanceof Error ? error.message : '판매자 센터 정보를 불러오지 못했습니다.')
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsLoading(false)
+      })
+
+    return () => controller.abort()
+  }, [])
+
+  const stats = dashboard
+    ? [
+        { label: '오늘 매출', value: `${dashboard.todaySalesAmount.toLocaleString()}원` },
+        { label: '월 매출', value: `${dashboard.monthlySalesAmount.toLocaleString()}원` },
+        { label: '주문', value: `${dashboard.orderCount.toLocaleString()}건` },
+        { label: '상품', value: `${dashboard.productCount.toLocaleString()}개` },
+        { label: '배송 준비', value: `${dashboard.preparingDeliveryCount.toLocaleString()}건` },
+        { label: '오늘 정산', value: `${dashboard.todaySettlementAmount.toLocaleString()}원` },
+      ]
+    : []
+
+  return (
+    <main className="storefront">
+      <section className="role-page role-page-seller">
+        <div className="role-page-heading">
+          <div>
+            <span>seller center</span>
+            <h1>{dashboard?.profile.storeName ?? '판매자 센터'}</h1>
+            <p>
+              {dashboard
+                ? `승인 상태: ${dashboard.profile.approvalStatus}`
+                : '상품, 주문, 매출 현황을 불러오고 있습니다.'}
+            </p>
+          </div>
+          <button type="button" onClick={onBack}>
+            이용자 화면 보기
+          </button>
+        </div>
+
+        {isLoading && <p className="role-message">판매자 센터 정보를 불러오고 있습니다.</p>}
+        {message && <p className="role-message role-message-error">{message}</p>}
+
+        {dashboard && (
+          <>
+            <div className="role-stat-grid">
+              {stats.map((stat) => (
+                <article key={stat.label}>
+                  <span>{stat.label}</span>
+                  <strong>{stat.value}</strong>
+                </article>
+              ))}
+            </div>
+
+            <section className="role-panel">
+              <h2>판매자 업무</h2>
+              <div className="role-action-grid">
+                <button type="button">상품 등록</button>
+                <button type="button">상품 관리</button>
+                <button type="button">주문 관리</button>
+                <button type="button">매출 관리</button>
+                <button type="button">문의 관리</button>
+                <button type="button">정산 내역</button>
+              </div>
+            </section>
+
+            <section className="role-panel">
+              <h2>공지</h2>
+              {dashboard.notices.length === 0 ? (
+                <p>등록된 공지가 없습니다.</p>
+              ) : (
+                <ul className="role-list">
+                  {dashboard.notices.map((notice) => (
+                    <li key={notice}>{notice}</li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </>
+        )}
+      </section>
+    </main>
+  )
+}
+
+function MyPage({
+  cart,
+  wishlist,
+  cartTotal,
+  onBack,
+  onOpenShop,
+}: {
+  cart: CartItem[]
+  wishlist: Product[]
+  cartTotal: number
+  onBack: () => void
+  onOpenShop: () => void
+}) {
+  return (
+    <main className="storefront">
+      <section className="role-page">
+        <div className="role-page-heading">
+          <div>
+            <span>my page</span>
+            <h1>사용자 페이지</h1>
+            <p>장바구니, 찜한 상품, 주문과 리뷰 관리 화면입니다.</p>
+          </div>
+          <button type="button" onClick={onBack}>
+            쇼핑 계속하기
+          </button>
+        </div>
+
+        <div className="role-stat-grid">
+          <article>
+            <span>장바구니</span>
+            <strong>{cart.length.toLocaleString()}개</strong>
+          </article>
+          <article>
+            <span>찜한 상품</span>
+            <strong>{wishlist.length.toLocaleString()}개</strong>
+          </article>
+          <article>
+            <span>결제 예정</span>
+            <strong>{cartTotal.toLocaleString()}원</strong>
+          </article>
+          <article>
+            <span>리뷰 관리</span>
+            <strong>0건</strong>
+          </article>
+        </div>
+
+        <div className="role-two-column">
+          <section className="role-panel">
+            <h2>장바구니</h2>
+            {cart.length === 0 ? (
+              <p>장바구니에 담긴 상품이 없습니다.</p>
+            ) : (
+              <ul className="role-list">
+                {cart.map((item) => (
+                  <li key={item.product.id}>
+                    <span>{item.product.name}</span>
+                    <strong>{item.quantity}개</strong>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button type="button" onClick={onOpenShop}>
+              장바구니 확인
+            </button>
+          </section>
+
+          <section className="role-panel">
+            <h2>찜한 상품</h2>
+            {wishlist.length === 0 ? (
+              <p>찜한 상품이 없습니다.</p>
+            ) : (
+              <ul className="role-list">
+                {wishlist.map((product) => (
+                  <li key={product.id}>
+                    <span>{product.name}</span>
+                    <strong>{(product.salePrice ?? product.price).toLocaleString()}원</strong>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+
+        <section className="role-panel">
+          <h2>주문 내역</h2>
+          <p>결제 시스템 연동 후 주문 내역이 자동으로 표시됩니다.</p>
+        </section>
+      </section>
+    </main>
+  )
+}
+
+function SettingsPage({
+  accountRole,
+  isLoggedIn,
+  onBack,
+  onLogout,
+}: {
+  accountRole: UserRole
+  isLoggedIn: boolean
+  onBack: () => void
+  onLogout: () => void
+}) {
+  const [orderNotice, setOrderNotice] = useState(true)
+  const [marketingNotice, setMarketingNotice] = useState(false)
+
+  return (
+    <main className="storefront">
+      <section className="role-page">
+        <div className="role-page-heading">
+          <div>
+            <span>settings</span>
+            <h1>설정</h1>
+            <p>계정 상태와 알림 수신 여부를 관리합니다.</p>
+          </div>
+          <button type="button" onClick={onBack}>
+            돌아가기
+          </button>
+        </div>
+
+        <section className="role-panel">
+          <h2>계정</h2>
+          <dl className="settings-list">
+            <div>
+              <dt>로그인 상태</dt>
+              <dd>{isLoggedIn ? '로그인됨' : '로그인 필요'}</dd>
+            </div>
+            <div>
+              <dt>권한</dt>
+              <dd>{accountRole}</dd>
+            </div>
+            <div>
+              <dt>API 서버</dt>
+              <dd>{API_BASE_URL}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="role-panel">
+          <h2>알림</h2>
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={orderNotice}
+              onChange={(event) => setOrderNotice(event.target.checked)}
+            />
+            주문 및 배송 알림 받기
+          </label>
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={marketingNotice}
+              onChange={(event) => setMarketingNotice(event.target.checked)}
+            />
+            이벤트와 추천 상품 알림 받기
+          </label>
+        </section>
+
+        {isLoggedIn && (
+          <section className="role-panel">
+            <h2>로그인 관리</h2>
+            <button type="button" onClick={onLogout}>
+              로그아웃
+            </button>
+          </section>
+        )}
+      </section>
+    </main>
+  )
+}
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => Boolean(localStorage.getItem('accessToken')))
   const [accountRole, setAccountRole] = useState<UserRole>(
@@ -1159,6 +1623,7 @@ function App() {
     loginId: '',
     password: '',
     passwordConfirm: '',
+    role: 'USER',
     address: '',
     addressDetail: '',
     phone: '',
@@ -1166,18 +1631,27 @@ function App() {
   const [phoneVerified, setPhoneVerified] = useState(false)
   const [authMessage, setAuthMessage] = useState('')
   const [activeCategory, setActiveCategory] = useState<Category>('all')
-  const [selectedProduct, setSelectedProduct] = useState<Product>(products[0])
-  const [selectedImage, setSelectedImage] = useState(products[0].images[0])
+  const [products, setProducts] = useState<Product[]>(fallbackProducts)
+  const [productMessage, setProductMessage] = useState('')
+  const [selectedProduct, setSelectedProduct] = useState<Product>(fallbackProducts[0])
+  const [selectedImage, setSelectedImage] = useState(fallbackProducts[0].images[0])
   const [quantity, setQuantity] = useState(1)
   const [cart, setCart] = useState<CartItem[]>([])
+  const [wishlist, setWishlist] = useState<Product[]>([])
   const [searchKeyword, setSearchKeyword] = useState('')
   const [carouselIndex, setCarouselIndex] = useState(0)
 
   const filteredProducts = useMemo(() => {
-    if (activeCategory === 'all') return products
-    if (activeCategory === 'sale') return products.filter((product) => product.salePrice)
-    return products.filter((product) => product.category === activeCategory)
-  }, [activeCategory])
+    const keyword = searchKeyword.trim().toLowerCase()
+    const categoryProducts =
+      activeCategory === 'all'
+        ? products
+        : activeCategory === 'sale'
+          ? products.filter((product) => product.salePrice)
+          : products.filter((product) => product.category === activeCategory)
+
+    return categoryProducts.filter((product) => matchesProductKeyword(product, keyword))
+  }, [activeCategory, products, searchKeyword])
 
   const cartTotal = cart.reduce(
     (sum, item) => sum + (item.product.salePrice ?? item.product.price) * item.quantity,
@@ -1194,7 +1668,7 @@ function App() {
         .toLowerCase()
         .includes(keyword),
     )
-  }, [searchKeyword])
+  }, [products, searchKeyword])
 
   const newProducts = products.slice(0, 3)
   const saleProducts = products.filter((product) => product.salePrice)
@@ -1202,6 +1676,39 @@ function App() {
   const carouselProduct = carouselProducts[carouselIndex % carouselProducts.length]
 
   useEffect(() => {
+    const controller = new AbortController()
+
+    fetch(`${API_BASE_URL}/products`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await readApiResponseMessage(response))
+        }
+
+        const data = (await response.json()) as ProductApiResponse[]
+        const nextProducts = data.map(toStorefrontProduct)
+
+        if (nextProducts.length > 0) {
+          setProducts(nextProducts)
+          setSelectedProduct(nextProducts[0])
+          setSelectedImage(nextProducts[0].images[0])
+          setProductMessage('')
+        }
+      })
+      .catch((error) => {
+        if (isAbortError(error)) return
+        setProductMessage(
+          error instanceof Error
+            ? `상품 API 연결 실패: ${error.message}. 기본 상품으로 표시합니다.`
+            : '상품 API 연결 실패로 기본 상품을 표시합니다.',
+        )
+      })
+
+    return () => controller.abort()
+  }, [])
+
+  useEffect(() => {
+    if (carouselProducts.length === 0) return undefined
+
     const timer = window.setInterval(() => {
       setCarouselIndex((index) => (index + 1) % carouselProducts.length)
     }, 3500)
@@ -1232,12 +1739,32 @@ function App() {
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setActiveCategory('all')
+    setView('shop')
   }
 
   function openLogin() {
     setAuthMode('login')
     setAuthMessage('')
     setView('auth')
+  }
+
+  function openRolePage() {
+    if (!isLoggedIn) {
+      openLogin()
+      return
+    }
+
+    if (accountRole === 'ADMIN') {
+      setView('admin')
+      return
+    }
+
+    if (accountRole === 'SELLER') {
+      setView('seller')
+      return
+    }
+
+    setView('mypage')
   }
 
   function logout() {
@@ -1275,6 +1802,7 @@ function App() {
         email: signupForm.email,
         loginId: signupForm.loginId,
         password: signupForm.password,
+        role: signupForm.role,
         address: signupForm.address,
         addressDetail: signupForm.addressDetail,
         phone: signupForm.phone,
@@ -1328,6 +1856,16 @@ function App() {
     setView(role === 'ADMIN' ? 'admin' : 'home')
   }
 
+  function toggleWishlist(product: Product) {
+    setWishlist((items) => {
+      if (items.some((item) => item.id === product.id)) {
+        return items.filter((item) => item.id !== product.id)
+      }
+
+      return [...items, product]
+    })
+  }
+
   function addToCart(product: Product) {
     setCart((items) => {
       const exists = items.find((item) => item.product.id === product.id)
@@ -1360,6 +1898,33 @@ function App() {
     return <AdminDashboard onLogout={logout} onOpenUserView={() => setView('home')} />
   }
 
+  if (view === 'seller') {
+    return <SellerCenterPage onBack={() => setView('home')} />
+  }
+
+  if (view === 'mypage') {
+    return (
+      <MyPage
+        cart={cart}
+        wishlist={wishlist}
+        cartTotal={cartTotal}
+        onBack={() => setView('home')}
+        onOpenShop={() => setView('shop')}
+      />
+    )
+  }
+
+  if (view === 'settings') {
+    return (
+      <SettingsPage
+        accountRole={accountRole}
+        isLoggedIn={isLoggedIn}
+        onBack={() => setView('home')}
+        onLogout={logout}
+      />
+    )
+  }
+
   return (
     <main className="storefront">
       <header className="site-header">
@@ -1368,11 +1933,15 @@ function App() {
             shop
           </button>
           <div className="shop-dropdown">
-            <button type="button" onClick={() => selectCategory('all')}>
+            <button type="button" onClick={() => selectCategory('plants')}>
               다육식물
             </button>
-            <button type="button">화분</button>
-            <button type="button">보조도구</button>
+            <button type="button" onClick={() => selectCategory('pots')}>
+              화분
+            </button>
+            <button type="button" onClick={() => selectCategory('tools')}>
+              보조도구
+            </button>
           </div>
         </div>
 
@@ -1384,11 +1953,15 @@ function App() {
           <button type="button" onClick={isLoggedIn ? logout : openLogin}>
             {isLoggedIn ? '로그아웃' : '로그인'}
           </button>
-          <button type="button">{accountRole === 'ADMIN' ? '관리자' : '내정보'}</button>
+          <button type="button" onClick={openRolePage}>
+            {accountRole === 'ADMIN' ? '관리자' : accountRole === 'SELLER' ? '판매자' : '사용자'}
+          </button>
           <a href="#cart" onClick={() => setView('shop')}>
             장바구니 {cart.length > 0 && <span>{cart.length}</span>}
           </a>
-          <button type="button">설정</button>
+          <button type="button" onClick={() => setView('settings')}>
+            설정
+          </button>
         </nav>
       </header>
 
@@ -1494,6 +2067,29 @@ function App() {
                     required
                   />
                 </label>
+                <fieldset className="role-select">
+                  <legend>회원 유형</legend>
+                  <label>
+                    <input
+                      type="radio"
+                      name="signupRole"
+                      value="USER"
+                      checked={signupForm.role === 'USER'}
+                      onChange={() => changeSignupField('role', 'USER')}
+                    />
+                    구매자
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="signupRole"
+                      value="SELLER"
+                      checked={signupForm.role === 'SELLER'}
+                      onChange={() => changeSignupField('role', 'SELLER')}
+                    />
+                    판매자
+                  </label>
+                </fieldset>
                 <div className="auth-grid">
                   <label>
                     비밀번호
@@ -1659,15 +2255,19 @@ function App() {
                   <h2>검색 결과</h2>
                 </div>
               </div>
-              <div className="home-product-grid">
-                {homeSearchProducts.map((product) => (
-                  <button key={product.id} type="button" onClick={() => selectProduct(product)}>
-                    <img src={product.images[0]} alt={product.name} />
-                    <span>{product.name}</span>
-                    <strong>{(product.salePrice ?? product.price).toLocaleString()}원</strong>
-                  </button>
-                ))}
-              </div>
+              {homeSearchProducts.length === 0 ? (
+                <p className="empty-message">검색어와 일치하는 상품이 없습니다.</p>
+              ) : (
+                <div className="home-product-grid">
+                  {homeSearchProducts.map((product) => (
+                    <button key={product.id} type="button" onClick={() => selectProduct(product)}>
+                      <img src={product.images[0]} alt={product.name} />
+                      <span>{product.name}</span>
+                      <strong>{(product.salePrice ?? product.price).toLocaleString()}원</strong>
+                    </button>
+                  ))}
+                </div>
+              )}
             </section>
           )}
         </>
@@ -1683,8 +2283,9 @@ function App() {
 
       <section className="category-band" aria-label="다육식물 카테고리">
         <div>
-          <h2>다육식물</h2>
-          <p>버튼을 누르면 해당 카테고리의 다육식물 정보가 표시됩니다.</p>
+          <h2>{categoryLabels[activeCategory]}</h2>
+          <p>다육식물, 화분, 보조도구를 그리드로 확인하고 검색어로 이름과 특징을 좁혀볼 수 있습니다.</p>
+          {productMessage && <p className="product-message">{productMessage}</p>}
         </div>
         <div className="category-buttons">
           {(Object.keys(categoryLabels) as Category[]).map((category) => (
@@ -1702,19 +2303,23 @@ function App() {
 
       <section className="product-browser">
         <aside className="product-list" aria-label="상품 목록">
-          {filteredProducts.map((product) => (
-            <button
-              key={product.id}
-              type="button"
-              className={selectedProduct.id === product.id ? 'product-tile is-selected' : 'product-tile'}
-              onClick={() => selectProduct(product)}
-            >
-              <img src={product.images[0]} alt={product.name} />
-              <span>{product.name}</span>
-              <strong>{(product.salePrice ?? product.price).toLocaleString()}원</strong>
-              {product.salePrice && <em>특가</em>}
-            </button>
-          ))}
+          {filteredProducts.length === 0 ? (
+            <p className="empty-message">조건에 맞는 상품이 없습니다.</p>
+          ) : (
+            filteredProducts.map((product) => (
+              <button
+                key={product.id}
+                type="button"
+                className={selectedProduct.id === product.id ? 'product-tile is-selected' : 'product-tile'}
+                onClick={() => selectProduct(product)}
+              >
+                <img src={product.images[0]} alt={product.name} />
+                <span>{product.name}</span>
+                <strong>{(product.salePrice ?? product.price).toLocaleString()}원</strong>
+                {product.salePrice && <em>특가</em>}
+              </button>
+            ))
+          )}
         </aside>
 
         <section className="product-detail" aria-label="상품 상세">
@@ -1786,6 +2391,9 @@ function App() {
               </button>
               <button type="button" onClick={() => addToCart(selectedProduct)}>
                 장바구니에 담기
+              </button>
+              <button type="button" onClick={() => toggleWishlist(selectedProduct)}>
+                {wishlist.some((product) => product.id === selectedProduct.id) ? '찜 해제' : '찜하기'}
               </button>
               <button type="button" className="naver-pay">
                 네이버 페이 구매
