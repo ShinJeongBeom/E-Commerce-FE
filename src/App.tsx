@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 import './App.css'
 
 type Category = 'all' | 'echeveria' | 'haworthia' | 'lithops' | 'sale'
@@ -89,6 +89,94 @@ type AdminBoardPost = {
   title: string
   authorLoginId: string
   createdDate: string
+}
+
+type AdminOrder = {
+  orderId: number
+  orderNumber: string
+  totalPrice: number
+  status: string
+  name: string
+  phone: string
+  address: string
+}
+
+type AdminMember = {
+  id: number
+  loginId: string
+  email: string
+  phone: string
+  role: UserRole
+  status: string
+  createdAt: string | null
+}
+
+type AdminSeller = {
+  id: number
+  memberId: number
+  loginId: string
+  email: string
+  storeName: string
+  approvalStatus: string
+}
+
+type AdminProduct = {
+  id: number
+  name: string
+  plantType: string
+  price: number
+  stock: number
+  status: string
+}
+
+type AdminBanner = {
+  id: number
+  title: string
+  imageUrl: string
+  linkUrl: string
+  visible: boolean
+  sortOrder: number
+}
+
+type AdminPolicy = {
+  id: number
+  policyKey: string
+  title: string
+  content: string
+}
+
+type AdminPost = {
+  id: number
+  type: string
+  title: string
+  content: string
+  authorLoginId: string
+  createdAt: string | null
+}
+
+type AdminInquiry = {
+  id: number
+  authorLoginId: string
+  title: string
+  content: string
+  answer: string | null
+  status: string
+}
+
+type AdminReport = {
+  id: number
+  targetType: 'PRODUCT' | 'REVIEW'
+  targetId: number
+  reason: string
+  status: string
+}
+
+type AdminSettlement = {
+  id: number
+  sellerProfileId: number
+  storeName: string
+  amount: number
+  status: string
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
@@ -214,45 +302,78 @@ async function readApiResponseMessage(response: Response) {
   return text || '요청 처리에 실패했습니다.'
 }
 
+async function adminFetch<T>(path: string, options: RequestInit = {}) {
+  const accessToken = localStorage.getItem('accessToken')
+  const headers = new Headers(options.headers)
+
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`)
+  }
+
+  if (options.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+  })
+
+  if (!response.ok) {
+    throw new Error(await readApiResponseMessage(response))
+  }
+
+  if (response.status === 204) {
+    return undefined as T
+  }
+
+  const text = await response.text()
+  return (text ? JSON.parse(text) : undefined) as T
+}
+
 function AdminDashboard({ onLogout, onOpenUserView }: { onLogout: () => void; onOpenUserView: () => void }) {
   const [dashboard, setDashboard] = useState<AdminDashboardResponse | null>(null)
   const [activeSection, setActiveSection] = useState<AdminSectionId>('orders')
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
 
-  useEffect(() => {
-    const controller = new AbortController()
+  const refreshDashboard = useCallback(async (signal?: AbortSignal) => {
+    setIsLoading(true)
+    setErrorMessage('')
 
-    async function loadDashboard() {
-      setIsLoading(true)
-      setErrorMessage('')
+    try {
+      const accessToken = localStorage.getItem('accessToken')
+      const response = await fetch(`${API_BASE_URL}/admin/dashboard`, {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        signal,
+      })
 
-      try {
-        const accessToken = localStorage.getItem('accessToken')
-        const response = await fetch(`${API_BASE_URL}/admin/dashboard`, {
-          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-          signal: controller.signal,
-        })
+      if (!response.ok) {
+        throw new Error(await readApiResponseMessage(response))
+      }
 
-        if (!response.ok) {
-          throw new Error(await readApiResponseMessage(response))
-        }
-
-        setDashboard((await response.json()) as AdminDashboardResponse)
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return
-        setErrorMessage(error instanceof Error ? error.message : '관리자 메인 정보를 불러오지 못했습니다.')
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsLoading(false)
-        }
+      setDashboard((await response.json()) as AdminDashboardResponse)
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      setErrorMessage(error instanceof Error ? error.message : '관리자 메인 정보를 불러오지 못했습니다.')
+    } finally {
+      if (!signal?.aborted) {
+        setIsLoading(false)
       }
     }
-
-    loadDashboard()
-
-    return () => controller.abort()
   }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => {
+      refreshDashboard(controller.signal)
+    }, 0)
+
+    return () => {
+      controller.abort()
+      window.clearTimeout(timeoutId)
+    }
+  }, [refreshDashboard])
 
   const todayCards = [
     { label: '회원 가입', value: dashboard?.todayStatus.memberSignupCount ?? 0, unit: '명' },
@@ -382,7 +503,7 @@ function AdminDashboard({ onLogout, onOpenUserView }: { onLogout: () => void; on
               <span>관리 메뉴</span>
               <h2>{activeMenu.label}</h2>
             </div>
-            <AdminSectionContent section={activeSection} dashboard={dashboard} />
+            <AdminSectionContent section={activeSection} dashboard={dashboard} onRefreshDashboard={() => refreshDashboard()} />
           </section>
 
           <section className="admin-board-grid">
@@ -406,7 +527,201 @@ function formatAdminMetric(value: number, unit: string, isMoney = false) {
   return `${value.toLocaleString()}${unit}${isMoney ? '' : ''}`
 }
 
-function AdminSectionContent({ section, dashboard }: { section: AdminSectionId; dashboard: AdminDashboardResponse }) {
+function AdminSectionContent({
+  section,
+  dashboard,
+  onRefreshDashboard,
+}: {
+  section: AdminSectionId
+  dashboard: AdminDashboardResponse
+  onRefreshDashboard: () => void
+}) {
+  const [orders, setOrders] = useState<AdminOrder[]>([])
+  const [members, setMembers] = useState<AdminMember[]>([])
+  const [sellers, setSellers] = useState<AdminSeller[]>([])
+  const [adminProducts, setAdminProducts] = useState<AdminProduct[]>([])
+  const [banners, setBanners] = useState<AdminBanner[]>([])
+  const [policies, setPolicies] = useState<AdminPolicy[]>([])
+  const [posts, setPosts] = useState<AdminPost[]>([])
+  const [inquiries, setInquiries] = useState<AdminInquiry[]>([])
+  const [reports, setReports] = useState<AdminReport[]>([])
+  const [settlements, setSettlements] = useState<AdminSettlement[]>([])
+  const [isSectionLoading, setIsSectionLoading] = useState(false)
+  const [sectionMessage, setSectionMessage] = useState('')
+
+  const loadSection = useCallback(async () => {
+    setIsSectionLoading(true)
+    setSectionMessage('')
+
+    try {
+      if (section === 'orders') {
+        const [nextOrders, nextSettlements] = await Promise.all([
+          adminFetch<AdminOrder[]>('/admin/orders'),
+          adminFetch<AdminSettlement[]>('/admin/settlements'),
+        ])
+        setOrders(nextOrders)
+        setSettlements(nextSettlements)
+      }
+
+      if (section === 'members') {
+        const [nextMembers, nextSellers] = await Promise.all([
+          adminFetch<AdminMember[]>('/admin/members'),
+          adminFetch<AdminSeller[]>('/admin/sellers'),
+        ])
+        setMembers(nextMembers)
+        setSellers(nextSellers)
+      }
+
+      if (section === 'main-products' || section === 'products') {
+        const [nextProducts, nextReports] = await Promise.all([
+          adminFetch<AdminProduct[]>('/admin/products'),
+          adminFetch<AdminReport[]>('/admin/reports'),
+        ])
+        setAdminProducts(nextProducts)
+        setReports(nextReports)
+      }
+
+      if (section === 'banners') {
+        setBanners(await adminFetch<AdminBanner[]>('/admin/banners'))
+      }
+
+      if (section === 'boards') {
+        const [nextPosts, nextInquiries] = await Promise.all([
+          adminFetch<AdminPost[]>('/admin/boards'),
+          adminFetch<AdminInquiry[]>('/admin/inquiries'),
+        ])
+        setPosts(nextPosts)
+        setInquiries(nextInquiries)
+      }
+
+      if (section === 'statistics') {
+        const [nextOrders, nextSettlements, nextReports] = await Promise.all([
+          adminFetch<AdminOrder[]>('/admin/orders'),
+          adminFetch<AdminSettlement[]>('/admin/settlements'),
+          adminFetch<AdminReport[]>('/admin/reports'),
+        ])
+        setOrders(nextOrders)
+        setSettlements(nextSettlements)
+        setReports(nextReports)
+      }
+
+      if (section === 'policies') {
+        setPolicies(await adminFetch<AdminPolicy[]>('/admin/policies'))
+      }
+    } catch (error) {
+      setSectionMessage(error instanceof Error ? error.message : '관리자 메뉴 정보를 불러오지 못했습니다.')
+    } finally {
+      setIsSectionLoading(false)
+    }
+  }, [section])
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      loadSection()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [loadSection])
+
+  async function runAdminAction(action: () => Promise<void>, successMessage: string) {
+    setSectionMessage('')
+
+    try {
+      await action()
+      setSectionMessage(successMessage)
+      await loadSection()
+      onRefreshDashboard()
+    } catch (error) {
+      setSectionMessage(error instanceof Error ? error.message : '요청 처리에 실패했습니다.')
+    }
+  }
+
+  function askRequired(message: string, defaultValue = '') {
+    const value = window.prompt(message, defaultValue)?.trim()
+    return value || null
+  }
+
+  async function createBanner() {
+    const title = askRequired('배너 제목을 입력하세요.')
+    if (!title) return
+    const imageUrl = askRequired('배너 이미지 URL을 입력하세요.', 'https://example.com/banner.jpg')
+    if (!imageUrl) return
+    const linkUrl = askRequired('배너 링크 URL을 입력하세요.', '/')
+    if (!linkUrl) return
+
+    await runAdminAction(
+      () => adminFetch('/admin/banners', {
+        method: 'POST',
+        body: JSON.stringify({ title, imageUrl, linkUrl, visible: true, sortOrder: banners.length + 1 }),
+      }),
+      '배너를 등록했습니다.',
+    )
+  }
+
+  async function savePolicy() {
+    const policyKey = askRequired('정책 키를 입력하세요.', 'sales-policy')
+    if (!policyKey) return
+    const title = askRequired('정책 제목을 입력하세요.', '판매 정책')
+    if (!title) return
+    const content = askRequired('정책 내용을 입력하세요.', '정책 내용을 입력하세요.')
+    if (!content) return
+
+    await runAdminAction(
+      () => adminFetch('/admin/policies', {
+        method: 'POST',
+        body: JSON.stringify({ policyKey, title, content }),
+      }),
+      '정책을 저장했습니다.',
+    )
+  }
+
+  async function createPost() {
+    const type = askRequired('게시글 유형을 입력하세요. NOTICE, IMPROVEMENT, MANUAL', 'NOTICE')
+    if (!type) return
+    const title = askRequired('게시글 제목을 입력하세요.')
+    if (!title) return
+    const content = askRequired('게시글 내용을 입력하세요.')
+    if (!content) return
+
+    await runAdminAction(
+      () => adminFetch('/admin/boards', {
+        method: 'POST',
+        body: JSON.stringify({ type, title, content }),
+      }),
+      '게시글을 등록했습니다.',
+    )
+  }
+
+  async function createReport(targetType: 'PRODUCT' | 'REVIEW') {
+    const targetId = Number(askRequired(`${targetType === 'PRODUCT' ? '상품' : '리뷰'} ID를 입력하세요.`))
+    if (!targetId) return
+    const reason = askRequired('신고 사유를 입력하세요.')
+    if (!reason) return
+
+    await runAdminAction(
+      () => adminFetch('/admin/reports', {
+        method: 'POST',
+        body: JSON.stringify({ targetType, targetId, reason }),
+      }),
+      '신고를 등록했습니다.',
+    )
+  }
+
+  async function createSettlement() {
+    const sellerProfileId = Number(askRequired('판매자 프로필 ID를 입력하세요.'))
+    if (!sellerProfileId) return
+    const amount = Number(askRequired('정산 금액을 입력하세요.'))
+    if (!amount) return
+
+    await runAdminAction(
+      () => adminFetch('/admin/settlements', {
+        method: 'POST',
+        body: JSON.stringify({ sellerProfileId, amount }),
+      }),
+      '정산 대기 건을 등록했습니다.',
+    )
+  }
+
   const sectionRows: Record<AdminSectionId, { title: string; value: string; description: string }[]> = {
     orders: [
       { title: '오늘 주문', value: `${dashboard.todayStatus.orderCount.toLocaleString()}건`, description: '오늘 생성된 전체 주문 수' },
@@ -451,14 +766,214 @@ function AdminSectionContent({ section, dashboard }: { section: AdminSectionId; 
   }
 
   return (
-    <div className="admin-section-grid">
-      {sectionRows[section].map((row) => (
-        <article key={row.title}>
-          <span>{row.title}</span>
-          <strong>{row.value}</strong>
-          <p>{row.description}</p>
-        </article>
-      ))}
+    <>
+      <div className="admin-section-grid">
+        {sectionRows[section].map((row) => (
+          <article key={row.title}>
+            <span>{row.title}</span>
+            <strong>{row.value}</strong>
+            <p>{row.description}</p>
+          </article>
+        ))}
+      </div>
+
+      <div className="admin-section-toolbar">
+        {section === 'banners' && <button type="button" onClick={createBanner}>배너 등록</button>}
+        {section === 'policies' && <button type="button" onClick={savePolicy}>정책 저장</button>}
+        {section === 'boards' && <button type="button" onClick={createPost}>게시글 등록</button>}
+        {(section === 'main-products' || section === 'products') && (
+          <>
+            <button type="button" onClick={() => createReport('PRODUCT')}>상품 신고 등록</button>
+            <button type="button" onClick={() => createReport('REVIEW')}>리뷰 신고 등록</button>
+          </>
+        )}
+        {(section === 'orders' || section === 'statistics') && (
+          <button type="button" onClick={createSettlement}>정산 등록</button>
+        )}
+      </div>
+
+      {isSectionLoading && <p className="admin-section-message">목록을 불러오는 중입니다.</p>}
+      {sectionMessage && <p className="admin-section-message">{sectionMessage}</p>}
+
+      {section === 'orders' && (
+        <AdminTable
+          headers={['주문번호', '수령인', '금액', '상태']}
+          rows={orders.map((order) => ({
+            id: order.orderId,
+            cells: [order.orderNumber, order.name, `${order.totalPrice.toLocaleString()}원`, order.status],
+          }))}
+        />
+      )}
+
+      {section === 'members' && (
+        <>
+          <AdminTable
+            headers={['회원', '이메일', '역할', '상태', '처리']}
+            rows={members.map((member) => ({
+              id: member.id,
+              cells: [member.loginId, member.email, member.role, member.status],
+              actions: (
+                <>
+                  <button type="button" onClick={() => runAdminAction(() => adminFetch(`/admin/members/${member.id}/suspend`, { method: 'PATCH' }), '회원을 정지했습니다.')}>정지</button>
+                  <button type="button" onClick={() => runAdminAction(() => adminFetch(`/admin/members/${member.id}`, { method: 'DELETE' }), '회원을 탈퇴 처리했습니다.')}>삭제</button>
+                </>
+              ),
+            }))}
+          />
+          <AdminTable
+            title="판매자 승인 관리"
+            headers={['스토어', '아이디', '상태', '처리']}
+            rows={sellers.map((seller) => ({
+              id: seller.id,
+              cells: [seller.storeName, seller.loginId, seller.approvalStatus],
+              actions: (
+                <>
+                  <button type="button" onClick={() => runAdminAction(() => adminFetch(`/admin/sellers/${seller.id}/approve`, { method: 'PATCH' }), '판매자를 승인했습니다.')}>승인</button>
+                  <button type="button" onClick={() => runAdminAction(() => adminFetch(`/admin/sellers/${seller.id}/suspend`, { method: 'PATCH' }), '판매자를 정지했습니다.')}>정지</button>
+                </>
+              ),
+            }))}
+          />
+        </>
+      )}
+
+      {(section === 'main-products' || section === 'products') && (
+        <>
+          <AdminTable
+            headers={['상품명', '종류', '가격', '재고', '상태', '처리']}
+            rows={adminProducts.map((product) => ({
+              id: product.id,
+              cells: [product.name, product.plantType, `${product.price.toLocaleString()}원`, `${product.stock}`, product.status],
+              actions: (
+                <>
+                  <button type="button" onClick={() => runAdminAction(() => adminFetch(`/admin/products/${product.id}/hide`, { method: 'PATCH' }), '상품을 숨김 처리했습니다.')}>숨김</button>
+                  <button type="button" onClick={() => runAdminAction(() => adminFetch(`/admin/products/${product.id}/restore`, { method: 'PATCH' }), '상품을 복구했습니다.')}>복구</button>
+                  <button type="button" onClick={() => runAdminAction(() => adminFetch(`/admin/products/${product.id}`, { method: 'DELETE' }), '상품을 삭제했습니다.')}>삭제</button>
+                </>
+              ),
+            }))}
+          />
+          <AdminTable
+            title="신고 관리"
+            headers={['대상', '대상 ID', '사유', '상태', '처리']}
+            rows={reports.map((report) => ({
+              id: report.id,
+              cells: [report.targetType, `${report.targetId}`, report.reason, report.status],
+              actions: <button type="button" onClick={() => runAdminAction(() => adminFetch(`/admin/reports/${report.id}/resolve`, { method: 'PATCH' }), '신고를 처리했습니다.')}>처리완료</button>,
+            }))}
+          />
+        </>
+      )}
+
+      {section === 'banners' && (
+        <AdminTable
+          headers={['제목', '링크', '노출', '순서', '처리']}
+          rows={banners.map((banner) => ({
+            id: banner.id,
+            cells: [banner.title, banner.linkUrl, banner.visible ? '노출' : '숨김', `${banner.sortOrder}`],
+            actions: (
+              <>
+                <button type="button" onClick={() => runAdminAction(() => adminFetch(`/admin/banners/${banner.id}`, {
+                  method: 'PUT',
+                  body: JSON.stringify({ ...banner, visible: !banner.visible }),
+                }), '배너 노출 상태를 변경했습니다.')}>노출전환</button>
+                <button type="button" onClick={() => runAdminAction(() => adminFetch(`/admin/banners/${banner.id}`, { method: 'DELETE' }), '배너를 삭제했습니다.')}>삭제</button>
+              </>
+            ),
+          }))}
+        />
+      )}
+
+      {section === 'boards' && (
+        <>
+          <AdminTable
+            headers={['유형', '제목', '작성자', '처리']}
+            rows={posts.map((post) => ({
+              id: post.id,
+              cells: [post.type, post.title, post.authorLoginId],
+              actions: <button type="button" onClick={() => runAdminAction(() => adminFetch(`/admin/boards/${post.id}`, { method: 'DELETE' }), '게시글을 삭제했습니다.')}>삭제</button>,
+            }))}
+          />
+          <AdminTable
+            title="문의 관리"
+            headers={['작성자', '제목', '상태', '처리']}
+            rows={inquiries.map((inquiry) => ({
+              id: inquiry.id,
+              cells: [inquiry.authorLoginId, inquiry.title, inquiry.status],
+              actions: <button type="button" onClick={() => {
+                const answer = askRequired('답변 내용을 입력하세요.', inquiry.answer ?? '')
+                if (!answer) return
+                runAdminAction(() => adminFetch(`/admin/inquiries/${inquiry.id}/answer`, {
+                  method: 'PATCH',
+                  body: JSON.stringify({ answer }),
+                }), '문의에 답변했습니다.')
+              }}>답변</button>,
+            }))}
+          />
+        </>
+      )}
+
+      {section === 'statistics' && (
+        <AdminTable
+          headers={['정산 ID', '스토어', '금액', '상태', '처리']}
+          rows={settlements.map((settlement) => ({
+            id: settlement.id,
+            cells: [`#${settlement.id}`, settlement.storeName, `${settlement.amount.toLocaleString()}원`, settlement.status],
+            actions: <button type="button" onClick={() => runAdminAction(() => adminFetch(`/admin/settlements/${settlement.id}/complete`, { method: 'PATCH' }), '정산을 완료했습니다.')}>완료</button>,
+          }))}
+        />
+      )}
+
+      {section === 'policies' && (
+        <AdminTable
+          headers={['정책 키', '제목', '내용']}
+          rows={policies.map((policy) => ({
+            id: policy.id,
+            cells: [policy.policyKey, policy.title, policy.content],
+          }))}
+        />
+      )}
+    </>
+  )
+}
+
+function AdminTable({
+  title,
+  headers,
+  rows,
+}: {
+  title?: string
+  headers: string[]
+  rows: { id: number; cells: string[]; actions?: ReactNode }[]
+}) {
+  return (
+    <div className="admin-table-wrap">
+      {title && <h3>{title}</h3>}
+      <table className="admin-table">
+        <thead>
+          <tr>
+            {headers.map((header) => (
+              <th key={header}>{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={headers.length}>표시할 데이터가 없습니다.</td>
+            </tr>
+          ) : (
+            rows.map((row) => (
+              <tr key={row.id}>
+                {row.cells.map((cell, index) => (
+                  <td key={`${row.id}-${headers[index]}`}>{cell}</td>
+                ))}
+                {row.actions && <td className="admin-table-actions">{row.actions}</td>}
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
     </div>
   )
 }

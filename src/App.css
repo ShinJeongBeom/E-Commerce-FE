@@ -1117,6 +1117,79 @@ input {
   line-height: 1.5;
 }
 
+.admin-section-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.admin-section-toolbar button,
+.admin-table-actions button {
+  min-height: 36px;
+  border: 1px solid #cfd6cf;
+  border-radius: 6px;
+  padding: 0 12px;
+  background: #ffffff;
+  color: #272b30;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.admin-section-toolbar button:hover,
+.admin-table-actions button:hover {
+  border-color: #314932;
+  background: #314932;
+  color: #ffffff;
+}
+
+.admin-section-message {
+  margin: 16px 0 0;
+  color: #697267;
+  font-weight: 800;
+}
+
+.admin-table-wrap {
+  margin-top: 18px;
+  overflow-x: auto;
+}
+
+.admin-table-wrap h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+
+.admin-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  border: 1px solid #d9ded9;
+  background: #ffffff;
+}
+
+.admin-table th,
+.admin-table td {
+  border-bottom: 1px solid #e3e7e3;
+  padding: 12px;
+  color: #272b30;
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-table th {
+  background: #f4f6f4;
+  color: #697267;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .admin-board-heading {
   display: flex;
   align-items: center;
