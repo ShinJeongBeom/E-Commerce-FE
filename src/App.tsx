@@ -3,8 +3,9 @@ import type { FormEvent } from 'react'
 import './App.css'
 
 type Category = 'all' | 'echeveria' | 'haworthia' | 'lithops' | 'sale'
-type View = 'home' | 'shop' | 'auth'
+type View = 'home' | 'shop' | 'auth' | 'admin'
 type AuthMode = 'login' | 'signup'
+type UserRole = 'USER' | 'SELLER' | 'ADMIN'
 
 type Product = {
   id: number
@@ -35,7 +36,47 @@ type SignupForm = {
   phone: string
 }
 
-const API_BASE_URL = 'http://localhost:8080'
+type AdminDashboardResponse = {
+  loginId: string
+  today: string
+  domainExpiresAt: string
+  domainDday: number
+  quickMenus: AdminQuickMenu[]
+  todayStatus: AdminTodayStatus
+  pendingStatus: AdminPendingStatus
+  improvementPosts: AdminBoardPost[]
+  manualPosts: AdminBoardPost[]
+}
+
+type AdminQuickMenu = {
+  label: string
+  target: string
+}
+
+type AdminTodayStatus = {
+  memberSignupCount: number
+  memberWithdrawalCount: number
+  productCreatedCount: number
+  pageViewCount: number
+  orderCount: number
+}
+
+type AdminPendingStatus = {
+  productReportCount: number
+  exchangeRefundCount: number
+  oneToOneInquiryCount: number
+  productInquiryCount: number
+  sellerApprovalCount: number
+  orderProcessingCount: number
+}
+
+type AdminBoardPost = {
+  title: string
+  authorLoginId: string
+  createdDate: string
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
 
 const products: Product[] = [
   {
@@ -135,9 +176,195 @@ const categoryLabels: Record<Category, string> = {
   sale: '세일',
 }
 
+async function readApiResponseMessage(response: Response) {
+  const contentType = response.headers.get('content-type') ?? ''
+
+  if (contentType.includes('application/json')) {
+    const data = await response.json()
+    return data.message ?? data.error ?? '요청 처리에 실패했습니다.'
+  }
+
+  const text = await response.text()
+  return text || '요청 처리에 실패했습니다.'
+}
+
+function AdminDashboard({ onLogout }: { onLogout: () => void }) {
+  const [dashboard, setDashboard] = useState<AdminDashboardResponse | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState('')
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    async function loadDashboard() {
+      setIsLoading(true)
+      setErrorMessage('')
+
+      try {
+        const accessToken = localStorage.getItem('accessToken')
+        const response = await fetch(`${API_BASE_URL}/admin/dashboard`, {
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+          signal: controller.signal,
+        })
+
+        if (!response.ok) {
+          throw new Error(await readApiResponseMessage(response))
+        }
+
+        setDashboard((await response.json()) as AdminDashboardResponse)
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        setErrorMessage(error instanceof Error ? error.message : '관리자 메인 정보를 불러오지 못했습니다.')
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadDashboard()
+
+    return () => controller.abort()
+  }, [])
+
+  const todayCards = [
+    { label: '회원 가입', value: dashboard?.todayStatus.memberSignupCount ?? 0, unit: '명' },
+    { label: '회원 탈퇴', value: dashboard?.todayStatus.memberWithdrawalCount ?? 0, unit: '명' },
+    { label: '상품 등록건', value: dashboard?.todayStatus.productCreatedCount ?? 0, unit: '건' },
+    { label: '페이지 뷰', value: dashboard?.todayStatus.pageViewCount ?? 0, unit: '건' },
+    { label: '주문 건', value: dashboard?.todayStatus.orderCount ?? 0, unit: '건' },
+  ]
+
+  const pendingCards = [
+    { label: '허위 상품 신고', value: dashboard?.pendingStatus.productReportCount ?? 0 },
+    { label: '교환/환불 신청', value: dashboard?.pendingStatus.exchangeRefundCount ?? 0 },
+    { label: '1:1 문의', value: dashboard?.pendingStatus.oneToOneInquiryCount ?? 0 },
+    { label: '상품 문의', value: dashboard?.pendingStatus.productInquiryCount ?? 0 },
+    { label: '판매자 승인', value: dashboard?.pendingStatus.sellerApprovalCount ?? 0 },
+    { label: '주문 처리', value: dashboard?.pendingStatus.orderProcessingCount ?? 0 },
+  ]
+
+  const navItems = ['주문 관리', '게시판 관리', '회원 관리', '메인 상품 관리', '배너 관리', '상품 관리', '통계', '기본 정책 관리']
+
+  return (
+    <main className="admin-console">
+      <header className="admin-header">
+        <div>
+          <span>flower garden admin</span>
+          <h1>관리자 메인</h1>
+          <p>{dashboard ? `${dashboard.loginId} 관리자` : '관리자 정보를 확인 중입니다.'}</p>
+        </div>
+        <div className="admin-header-actions">
+          <button type="button" onClick={() => window.alert('사용자 화면 이동은 다음 단계에서 연결합니다.')}>
+            이용자 화면 보기
+          </button>
+          <button type="button" onClick={() => window.alert('사내 게시판은 다음 단계에서 연결합니다.')}>
+            사내 게시판
+          </button>
+          <button type="button" onClick={onLogout}>
+            로그아웃
+          </button>
+        </div>
+      </header>
+
+      <nav className="admin-nav" aria-label="관리자 메뉴">
+        {navItems.map((item, index) => (
+          <button key={item} type="button" className={index === 0 ? 'is-active' : ''}>
+            {item}
+          </button>
+        ))}
+      </nav>
+
+      {isLoading && <section className="admin-panel">관리자 메인 정보를 불러오고 있습니다.</section>}
+      {errorMessage && <section className="admin-panel admin-error">{errorMessage}</section>}
+
+      {!isLoading && !errorMessage && dashboard && (
+        <>
+          <section className="admin-overview-grid">
+            <article className="admin-panel admin-account-panel">
+              <h2>{dashboard.loginId}</h2>
+              <div>
+                <h3>자주 이용하는 메뉴</h3>
+                <div className="admin-quick-grid">
+                  {dashboard.quickMenus.map((menu) => (
+                    <button key={menu.target} type="button">
+                      {menu.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="admin-domain">
+                <span>도메인 만료일</span>
+                <strong>{dashboard.domainExpiresAt}</strong>
+                <em>{dashboard.domainDday}일 남음</em>
+              </div>
+            </article>
+
+            <article className="admin-panel">
+              <h2>Today 현황 <span>{dashboard.today}</span></h2>
+              <div className="admin-stat-grid">
+                {todayCards.map((card) => (
+                  <div key={card.label}>
+                    <span>{card.label}</span>
+                    <strong>{card.value.toLocaleString()}{card.unit}</strong>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <article className="admin-panel">
+              <h2>미처리 현황</h2>
+              <div className="admin-stat-grid">
+                {pendingCards.map((card) => (
+                  <div key={card.label}>
+                    <span>{card.label}</span>
+                    <strong>{card.value.toLocaleString()}건</strong>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+
+          <section className="admin-board-grid">
+            <AdminBoard title="사내 사이트 개선 사항" posts={dashboard.improvementPosts} />
+            <AdminBoard title="업무 매뉴얼" posts={dashboard.manualPosts} />
+          </section>
+        </>
+      )}
+    </main>
+  )
+}
+
+function AdminBoard({ title, posts }: { title: string; posts: AdminBoardPost[] }) {
+  return (
+    <article className="admin-panel admin-board">
+      <div className="admin-board-heading">
+        <h2>{title}</h2>
+        <button type="button" aria-label={`${title} 더보기`}>
+          ›
+        </button>
+      </div>
+      <ul>
+        {posts.map((post) => (
+          <li key={`${post.title}-${post.authorLoginId}`}>
+            <span>{post.title}</span>
+            <em>{post.authorLoginId}</em>
+            <time>{post.createdDate}</time>
+          </li>
+        ))}
+      </ul>
+    </article>
+  )
+}
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => Boolean(localStorage.getItem('accessToken')))
-  const [view, setView] = useState<View>('home')
+  const [accountRole, setAccountRole] = useState<UserRole>(
+    () => (localStorage.getItem('accountRole') as UserRole | null) ?? 'USER',
+  )
+  const [view, setView] = useState<View>(() =>
+    localStorage.getItem('accountRole') === 'ADMIN' && localStorage.getItem('accessToken') ? 'admin' : 'home',
+  )
   const [authMode, setAuthMode] = useState<AuthMode>('login')
   const [loginId, setLoginId] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
@@ -230,25 +457,15 @@ function App() {
 
   function logout() {
     localStorage.removeItem('accessToken')
+    localStorage.removeItem('accountRole')
     setIsLoggedIn(false)
+    setAccountRole('USER')
     setAuthMessage('')
     setView('home')
   }
 
   function changeSignupField(field: keyof SignupForm, value: string) {
     setSignupForm((form) => ({ ...form, [field]: value }))
-  }
-
-  async function readResponseMessage(response: Response) {
-    const contentType = response.headers.get('content-type') ?? ''
-
-    if (contentType.includes('application/json')) {
-      const data = await response.json()
-      return data.message ?? data.error ?? '요청 처리에 실패했습니다.'
-    }
-
-    const text = await response.text()
-    return text || '요청 처리에 실패했습니다.'
   }
 
   async function submitSignup(event: FormEvent<HTMLFormElement>) {
@@ -280,7 +497,7 @@ function App() {
     })
 
     if (!response.ok) {
-      setAuthMessage(await readResponseMessage(response))
+      setAuthMessage(await readApiResponseMessage(response))
       return
     }
 
@@ -298,18 +515,19 @@ function App() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: loginId,
+        loginId,
         password: loginPassword,
       }),
     })
 
     if (!response.ok) {
-      setAuthMessage(await readResponseMessage(response))
+      setAuthMessage(await readApiResponseMessage(response))
       return
     }
 
     const data = await response.json()
     const accessToken = data.accessToken ?? data.token
+    const role = (data.role ?? 'USER') as UserRole
 
     if (!accessToken) {
       setAuthMessage('로그인은 성공했지만 토큰 응답값을 찾지 못했습니다.')
@@ -317,10 +535,12 @@ function App() {
     }
 
     localStorage.setItem('accessToken', accessToken)
+    localStorage.setItem('accountRole', role)
     setIsLoggedIn(true)
+    setAccountRole(role)
     setLoginPassword('')
     setAuthMessage('')
-    setView('home')
+    setView(role === 'ADMIN' ? 'admin' : 'home')
   }
 
   function addToCart(product: Product) {
@@ -351,6 +571,10 @@ function App() {
   const productPrice = selectedProduct.salePrice ?? selectedProduct.price
   const productTotal = productPrice * quantity
 
+  if (view === 'admin') {
+    return <AdminDashboard onLogout={logout} />
+  }
+
   return (
     <main className="storefront">
       <header className="site-header">
@@ -375,7 +599,7 @@ function App() {
           <button type="button" onClick={isLoggedIn ? logout : openLogin}>
             {isLoggedIn ? '로그아웃' : '로그인'}
           </button>
-          <button type="button">내정보</button>
+          <button type="button">{accountRole === 'ADMIN' ? '관리자' : '내정보'}</button>
           <a href="#cart" onClick={() => setView('shop')}>
             장바구니 {cart.length > 0 && <span>{cart.length}</span>}
           </a>
