@@ -6,7 +6,7 @@ type Category = 'all' | 'echeveria' | 'haworthia' | 'lithops' | 'sale'
 type View = 'home' | 'shop' | 'auth' | 'admin'
 type AuthMode = 'login' | 'signup'
 type UserRole = 'USER' | 'SELLER' | 'ADMIN'
-type AdminSectionId = 'orders' | 'boards' | 'members' | 'main-products' | 'banners' | 'products' | 'statistics' | 'policies'
+type AdminSectionId = 'orders' | 'boards' | 'members' | 'main-products' | 'banners' | 'products' | 'statistics' | 'policies' | 'audit'
 
 type Product = {
   id: number
@@ -179,6 +179,24 @@ type AdminSettlement = {
   status: string
 }
 
+type AdminAuditLog = {
+  id: number
+  adminLoginId: string
+  action: string
+  targetType: string
+  targetId: number
+  description: string
+  createdAt: string | null
+}
+
+type AdminPage<T> = {
+  items: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
 
 const products: Product[] = [
@@ -288,6 +306,7 @@ const adminMenus: AdminMenu[] = [
   { id: 'products', label: '상품 관리' },
   { id: 'statistics', label: '통계' },
   { id: 'policies', label: '기본 정책 관리' },
+  { id: 'audit', label: '감사 로그' },
 ]
 
 async function readApiResponseMessage(response: Response) {
@@ -503,7 +522,12 @@ function AdminDashboard({ onLogout, onOpenUserView }: { onLogout: () => void; on
               <span>관리 메뉴</span>
               <h2>{activeMenu.label}</h2>
             </div>
-            <AdminSectionContent section={activeSection} dashboard={dashboard} onRefreshDashboard={() => refreshDashboard()} />
+            <AdminSectionContent
+              key={activeSection}
+              section={activeSection}
+              dashboard={dashboard}
+              onRefreshDashboard={() => refreshDashboard()}
+            />
           </section>
 
           <section className="admin-board-grid">
@@ -546,8 +570,40 @@ function AdminSectionContent({
   const [inquiries, setInquiries] = useState<AdminInquiry[]>([])
   const [reports, setReports] = useState<AdminReport[]>([])
   const [settlements, setSettlements] = useState<AdminSettlement[]>([])
+  const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([])
+  const [filterKeyword, setFilterKeyword] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [page, setPage] = useState(0)
+  const [pageInfo, setPageInfo] = useState({ totalElements: 0, totalPages: 0 })
   const [isSectionLoading, setIsSectionLoading] = useState(false)
   const [sectionMessage, setSectionMessage] = useState('')
+
+  const buildAdminQuery = useCallback((extra: Record<string, string> = {}, includeStatus = true) => {
+    const params = new URLSearchParams()
+    params.set('page', String(page))
+    params.set('size', '10')
+
+    if (filterKeyword.trim()) {
+      params.set('keyword', filterKeyword.trim())
+    }
+
+    if (includeStatus && filterStatus) {
+      params.set('status', filterStatus)
+    }
+
+    Object.entries(extra).forEach(([key, value]) => {
+      if (value) {
+        params.set(key, value)
+      }
+    })
+
+    return params.toString()
+  }, [filterKeyword, filterStatus, page])
+
+  function applyPage<T>(pageResponse: AdminPage<T>, setter: (items: T[]) => void) {
+    setter(pageResponse.items)
+    setPageInfo({ totalElements: pageResponse.totalElements, totalPages: pageResponse.totalPages })
+  }
 
   const loadSection = useCallback(async () => {
     setIsSectionLoading(true)
@@ -556,64 +612,73 @@ function AdminSectionContent({
     try {
       if (section === 'orders') {
         const [nextOrders, nextSettlements] = await Promise.all([
-          adminFetch<AdminOrder[]>('/admin/orders'),
-          adminFetch<AdminSettlement[]>('/admin/settlements'),
+          adminFetch<AdminPage<AdminOrder>>(`/admin/orders?${buildAdminQuery()}`),
+          adminFetch<AdminPage<AdminSettlement>>('/admin/settlements?page=0&size=10'),
         ])
-        setOrders(nextOrders)
-        setSettlements(nextSettlements)
+        applyPage(nextOrders, setOrders)
+        setSettlements(nextSettlements.items)
       }
 
       if (section === 'members') {
         const [nextMembers, nextSellers] = await Promise.all([
-          adminFetch<AdminMember[]>('/admin/members'),
+          adminFetch<AdminPage<AdminMember>>(`/admin/members?${buildAdminQuery()}`),
           adminFetch<AdminSeller[]>('/admin/sellers'),
         ])
-        setMembers(nextMembers)
+        applyPage(nextMembers, setMembers)
         setSellers(nextSellers)
       }
 
       if (section === 'main-products' || section === 'products') {
         const [nextProducts, nextReports] = await Promise.all([
-          adminFetch<AdminProduct[]>('/admin/products'),
-          adminFetch<AdminReport[]>('/admin/reports'),
+          adminFetch<AdminPage<AdminProduct>>(`/admin/products?${buildAdminQuery()}`),
+          adminFetch<AdminPage<AdminReport>>('/admin/reports?page=0&size=10'),
         ])
-        setAdminProducts(nextProducts)
-        setReports(nextReports)
+        applyPage(nextProducts, setAdminProducts)
+        setReports(nextReports.items)
       }
 
       if (section === 'banners') {
-        setBanners(await adminFetch<AdminBanner[]>('/admin/banners'))
+        applyPage(
+          await adminFetch<AdminPage<AdminBanner>>(
+            `/admin/banners?${buildAdminQuery(filterStatus ? { visible: filterStatus } : {}, false)}`,
+          ),
+          setBanners,
+        )
       }
 
       if (section === 'boards') {
         const [nextPosts, nextInquiries] = await Promise.all([
-          adminFetch<AdminPost[]>('/admin/boards'),
-          adminFetch<AdminInquiry[]>('/admin/inquiries'),
+          adminFetch<AdminPage<AdminPost>>(`/admin/boards?${buildAdminQuery()}`),
+          adminFetch<AdminPage<AdminInquiry>>('/admin/inquiries?page=0&size=10'),
         ])
-        setPosts(nextPosts)
-        setInquiries(nextInquiries)
+        applyPage(nextPosts, setPosts)
+        setInquiries(nextInquiries.items)
       }
 
       if (section === 'statistics') {
         const [nextOrders, nextSettlements, nextReports] = await Promise.all([
-          adminFetch<AdminOrder[]>('/admin/orders'),
-          adminFetch<AdminSettlement[]>('/admin/settlements'),
-          adminFetch<AdminReport[]>('/admin/reports'),
+          adminFetch<AdminPage<AdminOrder>>('/admin/orders?page=0&size=10'),
+          adminFetch<AdminPage<AdminSettlement>>(`/admin/settlements?${buildAdminQuery()}`),
+          adminFetch<AdminPage<AdminReport>>('/admin/reports?page=0&size=10'),
         ])
-        setOrders(nextOrders)
-        setSettlements(nextSettlements)
-        setReports(nextReports)
+        setOrders(nextOrders.items)
+        applyPage(nextSettlements, setSettlements)
+        setReports(nextReports.items)
       }
 
       if (section === 'policies') {
-        setPolicies(await adminFetch<AdminPolicy[]>('/admin/policies'))
+        applyPage(await adminFetch<AdminPage<AdminPolicy>>(`/admin/policies?${buildAdminQuery()}`), setPolicies)
+      }
+
+      if (section === 'audit') {
+        applyPage(await adminFetch<AdminPage<AdminAuditLog>>(`/admin/audit-logs?${buildAdminQuery()}`), setAuditLogs)
       }
     } catch (error) {
       setSectionMessage(error instanceof Error ? error.message : '관리자 메뉴 정보를 불러오지 못했습니다.')
     } finally {
       setIsSectionLoading(false)
     }
-  }, [section])
+  }, [buildAdminQuery, filterStatus, section])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -722,6 +787,17 @@ function AdminSectionContent({
     )
   }
 
+  function getStatusOptions() {
+    if (section === 'orders') return ['CREATED', 'PAID', 'PREPARING', 'SHIPPED', 'DELIVERED', 'CANCELLED']
+    if (section === 'members') return ['ACTIVE', 'SUSPENDED', 'DELETED']
+    if (section === 'main-products' || section === 'products') return ['ON_SALE', 'SOLD_OUT', 'HIDDEN']
+    if (section === 'banners') return ['true', 'false']
+    if (section === 'statistics') return ['PENDING', 'COMPLETED']
+    return []
+  }
+
+  const statusOptions = getStatusOptions()
+
   const sectionRows: Record<AdminSectionId, { title: string; value: string; description: string }[]> = {
     orders: [
       { title: '오늘 주문', value: `${dashboard.todayStatus.orderCount.toLocaleString()}건`, description: '오늘 생성된 전체 주문 수' },
@@ -763,6 +839,11 @@ function AdminSectionContent({
       { title: '정산 정책', value: '기본 정책', description: '정산 대기와 지급 기준' },
       { title: '신고 처리 정책', value: '기본 정책', description: '상품과 리뷰 신고 처리 기준' },
     ],
+    audit: [
+      { title: '감사 로그', value: `${pageInfo.totalElements.toLocaleString()}건`, description: '관리자 상태 변경과 저장 작업 이력' },
+      { title: '현재 페이지', value: `${page + 1}`, description: '감사 로그 페이지 위치' },
+      { title: '검색어', value: filterKeyword || '전체', description: '관리자, 액션, 대상, 설명 기준 검색' },
+    ],
   }
 
   return (
@@ -778,6 +859,32 @@ function AdminSectionContent({
       </div>
 
       <div className="admin-section-toolbar">
+        <input
+          value={filterKeyword}
+          onChange={(event) => {
+            setPage(0)
+            setFilterKeyword(event.target.value)
+          }}
+          placeholder="검색어"
+          aria-label="관리자 목록 검색어"
+        />
+        {statusOptions.length > 0 && (
+          <select
+            value={filterStatus}
+            onChange={(event) => {
+              setPage(0)
+              setFilterStatus(event.target.value)
+            }}
+            aria-label="관리자 목록 상태 필터"
+          >
+            <option value="">전체 상태</option>
+            {statusOptions.map((status) => (
+              <option key={status} value={status}>
+                {section === 'banners' ? (status === 'true' ? '노출' : '숨김') : status}
+              </option>
+            ))}
+          </select>
+        )}
         {section === 'banners' && <button type="button" onClick={createBanner}>배너 등록</button>}
         {section === 'policies' && <button type="button" onClick={savePolicy}>정책 저장</button>}
         {section === 'boards' && <button type="button" onClick={createPost}>게시글 등록</button>}
@@ -794,6 +901,25 @@ function AdminSectionContent({
 
       {isSectionLoading && <p className="admin-section-message">목록을 불러오는 중입니다.</p>}
       {sectionMessage && <p className="admin-section-message">{sectionMessage}</p>}
+
+      <div className="admin-pagination">
+        <span>
+          총 {pageInfo.totalElements.toLocaleString()}건
+          {pageInfo.totalPages > 0 ? ` · ${page + 1}/${pageInfo.totalPages}페이지` : ''}
+        </span>
+        <div>
+          <button type="button" disabled={page === 0} onClick={() => setPage((current) => Math.max(current - 1, 0))}>
+            이전
+          </button>
+          <button
+            type="button"
+            disabled={pageInfo.totalPages === 0 || page + 1 >= pageInfo.totalPages}
+            onClick={() => setPage((current) => current + 1)}
+          >
+            다음
+          </button>
+        </div>
+      </div>
 
       {section === 'orders' && (
         <AdminTable
@@ -930,6 +1056,22 @@ function AdminSectionContent({
           rows={policies.map((policy) => ({
             id: policy.id,
             cells: [policy.policyKey, policy.title, policy.content],
+          }))}
+        />
+      )}
+
+      {section === 'audit' && (
+        <AdminTable
+          headers={['관리자', '액션', '대상', '설명', '시각']}
+          rows={auditLogs.map((log) => ({
+            id: log.id,
+            cells: [
+              log.adminLoginId,
+              log.action,
+              `${log.targetType} #${log.targetId}`,
+              log.description,
+              log.createdAt ?? '-',
+            ],
           }))}
         />
       )}

@@ -1120,11 +1120,14 @@ input {
 .admin-section-toolbar {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
   margin-top: 18px;
 }
 
 .admin-section-toolbar button,
+.admin-section-toolbar input,
+.admin-section-toolbar select,
 .admin-table-actions button {
   min-height: 36px;
   border: 1px solid #cfd6cf;
@@ -1135,6 +1138,14 @@ input {
   font: inherit;
   font-weight: 800;
   cursor: pointer;
+}
+
+.admin-section-toolbar input,
+.admin-section-toolbar select {
+  min-width: 180px;
+  background: #f8faf8;
+  font-weight: 600;
+  cursor: auto;
 }
 
 .admin-section-toolbar button:hover,
@@ -1148,6 +1159,38 @@ input {
   margin: 16px 0 0;
   color: #697267;
   font-weight: 800;
+}
+
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  color: #697267;
+  font-weight: 800;
+}
+
+.admin-pagination div {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-pagination button {
+  min-height: 34px;
+  border: 1px solid #cfd6cf;
+  border-radius: 6px;
+  padding: 0 12px;
+  background: #ffffff;
+  color: #272b30;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.admin-pagination button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .admin-table-wrap {
