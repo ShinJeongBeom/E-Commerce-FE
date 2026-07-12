@@ -271,6 +271,54 @@ type SellerDashboardResponse = {
   notices: string[]
 }
 
+type SellerSection = 'register' | 'products' | 'orders' | 'sales' | 'inquiries' | 'settlements'
+
+type SellerProductResponse = {
+  id: number
+  name: string
+  price: number
+  stock: number
+  status: string
+  imageUrl: string
+}
+
+type SellerOrderResponse = {
+  id: number
+  orderNumber: string
+  totalPrice: number
+  status: string
+  receiverName: string
+  receiverPhone: string
+  shippingAddress: string
+}
+
+type SellerSalesResponse = {
+  todaySalesAmount: number
+  monthlySalesAmount: number
+  orderCount: number
+  averageOrderAmount: number
+}
+
+type SellerInquiryResponse = {
+  id: number
+  title: string
+  status: string
+}
+
+type SellerProductForm = {
+  name: string
+  plantType: string
+  careLevel: 'EASY' | 'NORMAL' | 'HARD'
+  lightRequirement: 'LOW' | 'MEDIUM' | 'HIGH'
+  wateringCycle: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY'
+  imageUrl: string
+  potIncluded: string
+  description: string
+  price: string
+  stock: string
+  status: 'ON_SALE' | 'SOLD_OUT' | 'HIDDEN'
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
 const TOSS_CLIENT_KEY = import.meta.env.VITE_TOSS_CLIENT_KEY ?? ''
 const FALLBACK_IMAGE =
@@ -1394,9 +1442,59 @@ function AdminBoard({ title, posts }: { title: string; posts: AdminBoardPost[] }
 }
 
 function SellerCenterPage({ onBack }: { onBack: () => void }) {
+  function createDefaultProductForm(): SellerProductForm {
+    return {
+      name: '',
+      plantType: 'plants',
+      careLevel: 'EASY',
+      lightRequirement: 'MEDIUM',
+      wateringCycle: 'BIWEEKLY',
+      imageUrl: FALLBACK_IMAGE,
+      potIncluded: '기본 포트 포함',
+      description: '',
+      price: '',
+      stock: '20',
+      status: 'ON_SALE',
+    }
+  }
+
+  function toCareLevel(value: string | null | undefined): SellerProductForm['careLevel'] {
+    return value === 'NORMAL' || value === 'HARD' ? value : 'EASY'
+  }
+
+  function toLightRequirement(value: string | null | undefined): SellerProductForm['lightRequirement'] {
+    return value === 'LOW' || value === 'HIGH' ? value : 'MEDIUM'
+  }
+
+  function toWateringCycle(value: string | null | undefined): SellerProductForm['wateringCycle'] {
+    return value === 'WEEKLY' || value === 'MONTHLY' ? value : 'BIWEEKLY'
+  }
+
+  function toProductStatus(value: string | null | undefined): SellerProductForm['status'] {
+    return value === 'SOLD_OUT' || value === 'HIDDEN' ? value : 'ON_SALE'
+  }
+
   const [dashboard, setDashboard] = useState<SellerDashboardResponse | null>(null)
+  const [activeSection, setActiveSection] = useState<SellerSection>('register')
+  const [products, setProducts] = useState<SellerProductResponse[]>([])
+  const [orders, setOrders] = useState<SellerOrderResponse[]>([])
+  const [sales, setSales] = useState<SellerSalesResponse | null>(null)
+  const [inquiries, setInquiries] = useState<SellerInquiryResponse[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isSectionLoading, setIsSectionLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [sectionMessage, setSectionMessage] = useState('')
+  const [editingProductId, setEditingProductId] = useState<number | null>(null)
+  const [productForm, setProductForm] = useState<SellerProductForm>(createDefaultProductForm)
+
+  const sellerSections: Array<{ id: SellerSection; label: string }> = [
+    { id: 'register', label: '상품 등록' },
+    { id: 'products', label: '상품 관리' },
+    { id: 'orders', label: '주문 관리' },
+    { id: 'sales', label: '매출 관리' },
+    { id: 'inquiries', label: '문의 관리' },
+    { id: 'settlements', label: '정산 내역' },
+  ]
 
   useEffect(() => {
     const controller = new AbortController()
@@ -1417,6 +1515,45 @@ function SellerCenterPage({ onBack }: { onBack: () => void }) {
     return () => controller.abort()
   }, [])
 
+  const isApprovedSeller = dashboard?.profile.approvalStatus === 'APPROVED'
+
+  const loadSellerSection = useCallback(async (section: SellerSection) => {
+    if (!isApprovedSeller) return
+
+    setIsSectionLoading(true)
+    setSectionMessage('')
+
+    try {
+      if (section === 'products') {
+        setProducts(await authFetch<SellerProductResponse[]>('/seller-center/products'))
+      }
+
+      if (section === 'orders') {
+        setOrders(await authFetch<SellerOrderResponse[]>('/seller-center/orders'))
+      }
+
+      if (section === 'sales' || section === 'settlements') {
+        setSales(await authFetch<SellerSalesResponse>('/seller-center/sales'))
+      }
+
+      if (section === 'inquiries') {
+        setInquiries(await authFetch<SellerInquiryResponse[]>('/seller-center/inquiries'))
+      }
+    } catch (error) {
+      setSectionMessage(error instanceof Error ? error.message : '판매자 업무 정보를 불러오지 못했습니다.')
+    } finally {
+      setIsSectionLoading(false)
+    }
+  }, [isApprovedSeller])
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      loadSellerSection(activeSection)
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [activeSection, loadSellerSection])
+
   const stats = dashboard
     ? [
         { label: '오늘 매출', value: `${dashboard.todaySalesAmount.toLocaleString()}원` },
@@ -1427,6 +1564,301 @@ function SellerCenterPage({ onBack }: { onBack: () => void }) {
         { label: '오늘 정산', value: `${dashboard.todaySettlementAmount.toLocaleString()}원` },
       ]
     : []
+
+  function changeProductForm(field: keyof SellerProductForm, value: string) {
+    setProductForm((form) => ({ ...form, [field]: value }))
+  }
+
+  function resetProductForm() {
+    setEditingProductId(null)
+    setProductForm(createDefaultProductForm())
+  }
+
+  function createProductPayload() {
+    return {
+      name: productForm.name,
+      plantType: productForm.plantType,
+      careLevel: productForm.careLevel,
+      lightRequirement: productForm.lightRequirement,
+      wateringCycle: productForm.wateringCycle,
+      imageUrl: productForm.imageUrl || FALLBACK_IMAGE,
+      potIncluded: productForm.potIncluded,
+      description: productForm.description,
+      price: Number(productForm.price),
+      stock: Number(productForm.stock),
+      status: productForm.status,
+    }
+  }
+
+  async function submitProduct(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setSectionMessage('')
+
+    const payload = createProductPayload()
+    if (!payload.name || !payload.description || payload.price <= 0 || payload.stock < 0) {
+      setSectionMessage('상품명, 설명, 가격, 재고를 확인해주세요.')
+      return
+    }
+
+    try {
+      if (editingProductId) {
+        await authFetch(`/products/${editingProductId}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        })
+        setSectionMessage('상품 정보를 수정했습니다.')
+      } else {
+        await authFetch('/products', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })
+        setSectionMessage('상품을 등록했습니다.')
+      }
+      resetProductForm()
+      await loadSellerSection('products')
+      setActiveSection('products')
+    } catch (error) {
+      setSectionMessage(error instanceof Error ? error.message : '상품 저장에 실패했습니다.')
+    }
+  }
+
+  async function editProduct(productId: number) {
+    setSectionMessage('')
+
+    try {
+      const product = await authFetch<ProductApiResponse>(`/products/${productId}`)
+      setEditingProductId(product.id)
+      setProductForm({
+        name: product.name,
+        plantType: product.plantType ?? 'plants',
+        careLevel: toCareLevel(product.careLevel),
+        lightRequirement: toLightRequirement(product.lightRequirement),
+        wateringCycle: toWateringCycle(product.wateringCycle),
+        imageUrl: product.imageUrl ?? FALLBACK_IMAGE,
+        potIncluded: product.potIncluded ?? '기본 포트 포함',
+        description: product.description ?? '',
+        price: String(product.price),
+        stock: String(product.stock),
+        status: toProductStatus(product.status),
+      })
+      setActiveSection('register')
+    } catch (error) {
+      setSectionMessage(error instanceof Error ? error.message : '상품 상세 정보를 불러오지 못했습니다.')
+    }
+  }
+
+  async function deleteProduct(productId: number) {
+    setSectionMessage('')
+
+    try {
+      await authFetch(`/products/${productId}`, { method: 'DELETE' })
+      setSectionMessage('상품을 판매 중지 처리했습니다.')
+      await loadSellerSection('products')
+    } catch (error) {
+      setSectionMessage(error instanceof Error ? error.message : '상품 삭제에 실패했습니다.')
+    }
+  }
+
+  function renderSellerSection() {
+    if (!isApprovedSeller) {
+      return (
+        <section className="role-panel">
+          <h2>승인 대기</h2>
+          <p>관리자 승인 후 상품 등록, 주문 관리, 매출 관리 기능을 사용할 수 있습니다.</p>
+        </section>
+      )
+    }
+
+    if (activeSection === 'register') {
+      return (
+        <section className="role-panel seller-work-panel">
+          <div className="seller-section-heading">
+            <h2>{editingProductId ? '상품 수정' : '상품 등록'}</h2>
+            {editingProductId && <button type="button" onClick={resetProductForm}>새 상품 등록</button>}
+          </div>
+          <form className="seller-product-form" onSubmit={submitProduct}>
+            <label>
+              상품명
+              <input value={productForm.name} onChange={(event) => changeProductForm('name', event.target.value)} />
+            </label>
+            <label>
+              상품 분류
+              <select value={productForm.plantType} onChange={(event) => changeProductForm('plantType', event.target.value)}>
+                <option value="plants">다육식물</option>
+                <option value="pots">화분</option>
+                <option value="tools">보조도구</option>
+              </select>
+            </label>
+            <label>
+              관리 난이도
+              <select value={productForm.careLevel} onChange={(event) => changeProductForm('careLevel', event.target.value)}>
+                <option value="EASY">쉬움</option>
+                <option value="NORMAL">보통</option>
+                <option value="HARD">어려움</option>
+              </select>
+            </label>
+            <label>
+              햇빛
+              <select value={productForm.lightRequirement} onChange={(event) => changeProductForm('lightRequirement', event.target.value)}>
+                <option value="LOW">낮음</option>
+                <option value="MEDIUM">보통</option>
+                <option value="HIGH">높음</option>
+              </select>
+            </label>
+            <label>
+              물주기
+              <select value={productForm.wateringCycle} onChange={(event) => changeProductForm('wateringCycle', event.target.value)}>
+                <option value="WEEKLY">매주</option>
+                <option value="BIWEEKLY">2주마다</option>
+                <option value="MONTHLY">매월</option>
+              </select>
+            </label>
+            <label>
+              이미지 URL
+              <input value={productForm.imageUrl} onChange={(event) => changeProductForm('imageUrl', event.target.value)} />
+            </label>
+            <label>
+              화분 포함
+              <input value={productForm.potIncluded} onChange={(event) => changeProductForm('potIncluded', event.target.value)} />
+            </label>
+            <label>
+              가격
+              <input type="number" min="1" value={productForm.price} onChange={(event) => changeProductForm('price', event.target.value)} />
+            </label>
+            <label>
+              재고
+              <input type="number" min="0" value={productForm.stock} onChange={(event) => changeProductForm('stock', event.target.value)} />
+            </label>
+            <label>
+              판매 상태
+              <select value={productForm.status} onChange={(event) => changeProductForm('status', event.target.value)}>
+                <option value="ON_SALE">판매중</option>
+                <option value="SOLD_OUT">품절</option>
+                <option value="HIDDEN">숨김</option>
+              </select>
+            </label>
+            <label className="seller-form-wide">
+              상품 설명
+              <textarea value={productForm.description} onChange={(event) => changeProductForm('description', event.target.value)} />
+            </label>
+            <button type="submit">{editingProductId ? '상품 수정' : '상품 등록'}</button>
+          </form>
+        </section>
+      )
+    }
+
+    if (activeSection === 'products') {
+      return (
+        <section className="role-panel seller-work-panel">
+          <h2>상품 관리</h2>
+          {products.length === 0 ? (
+            <p>등록된 상품이 없습니다.</p>
+          ) : (
+            <div className="seller-table-wrap">
+              <table className="seller-table">
+                <thead>
+                  <tr>
+                    <th>상품</th>
+                    <th>가격</th>
+                    <th>재고</th>
+                    <th>상태</th>
+                    <th>관리</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((product) => (
+                    <tr key={product.id}>
+                      <td>
+                        <span className="seller-product-cell">
+                          <img src={product.imageUrl || FALLBACK_IMAGE} alt={product.name} />
+                          {product.name}
+                        </span>
+                      </td>
+                      <td>{product.price.toLocaleString()}원</td>
+                      <td>{product.stock.toLocaleString()}개</td>
+                      <td>{product.status}</td>
+                      <td>
+                        <button type="button" onClick={() => editProduct(product.id)}>수정</button>
+                        <button type="button" onClick={() => deleteProduct(product.id)}>판매 중지</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )
+    }
+
+    if (activeSection === 'orders') {
+      return (
+        <section className="role-panel seller-work-panel">
+          <h2>주문 관리</h2>
+          {orders.length === 0 ? (
+            <p>주문 내역이 없습니다.</p>
+          ) : (
+            <ul className="seller-card-list">
+              {orders.map((order) => (
+                <li key={order.id}>
+                  <strong>{order.orderNumber}</strong>
+                  <span>{order.status}</span>
+                  <p>{order.receiverName} · {order.receiverPhone} · {order.shippingAddress}</p>
+                  <em>{order.totalPrice.toLocaleString()}원</em>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )
+    }
+
+    if (activeSection === 'sales') {
+      return (
+        <section className="role-panel seller-work-panel">
+          <h2>매출 관리</h2>
+          <div className="seller-metric-grid">
+            <article><span>오늘 매출</span><strong>{(sales?.todaySalesAmount ?? 0).toLocaleString()}원</strong></article>
+            <article><span>월 매출</span><strong>{(sales?.monthlySalesAmount ?? 0).toLocaleString()}원</strong></article>
+            <article><span>결제 주문</span><strong>{(sales?.orderCount ?? 0).toLocaleString()}건</strong></article>
+            <article><span>평균 주문 금액</span><strong>{(sales?.averageOrderAmount ?? 0).toLocaleString()}원</strong></article>
+          </div>
+        </section>
+      )
+    }
+
+    if (activeSection === 'inquiries') {
+      return (
+        <section className="role-panel seller-work-panel">
+          <h2>문의 관리</h2>
+          {inquiries.length === 0 ? (
+            <p>등록된 문의가 없습니다.</p>
+          ) : (
+            <ul className="seller-card-list">
+              {inquiries.map((inquiry) => (
+                <li key={inquiry.id}>
+                  <strong>{inquiry.title}</strong>
+                  <span>{inquiry.status}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )
+    }
+
+    return (
+      <section className="role-panel seller-work-panel">
+        <h2>정산 내역</h2>
+        <div className="seller-metric-grid">
+          <article><span>정산 가능 매출</span><strong>{(sales?.monthlySalesAmount ?? 0).toLocaleString()}원</strong></article>
+          <article><span>오늘 정산</span><strong>{(dashboard?.todaySettlementAmount ?? 0).toLocaleString()}원</strong></article>
+          <article><span>결제 완료 주문</span><strong>{(sales?.orderCount ?? 0).toLocaleString()}건</strong></article>
+          <article><span>정산 상태</span><strong>대기</strong></article>
+        </div>
+      </section>
+    )
+  }
 
   return (
     <main className="storefront">
@@ -1463,14 +1895,23 @@ function SellerCenterPage({ onBack }: { onBack: () => void }) {
             <section className="role-panel">
               <h2>판매자 업무</h2>
               <div className="role-action-grid">
-                <button type="button">상품 등록</button>
-                <button type="button">상품 관리</button>
-                <button type="button">주문 관리</button>
-                <button type="button">매출 관리</button>
-                <button type="button">문의 관리</button>
-                <button type="button">정산 내역</button>
+                {sellerSections.map((section) => (
+                  <button
+                    key={section.id}
+                    type="button"
+                    className={activeSection === section.id ? 'is-active' : ''}
+                    disabled={!isApprovedSeller}
+                    onClick={() => setActiveSection(section.id)}
+                  >
+                    {section.label}
+                  </button>
+                ))}
               </div>
             </section>
+
+            {isSectionLoading && <p className="role-message">판매자 업무 정보를 불러오고 있습니다.</p>}
+            {sectionMessage && <p className="role-message">{sectionMessage}</p>}
+            {renderSellerSection()}
 
             <section className="role-panel">
               <h2>공지</h2>

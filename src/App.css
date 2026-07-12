@@ -1009,6 +1009,150 @@ input {
   color: #314932;
 }
 
+.role-action-grid button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.role-action-grid button.is-active {
+  background: #314932;
+  color: #fff;
+}
+
+.seller-work-panel {
+  gap: 18px;
+}
+
+.seller-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.seller-product-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.seller-product-form label {
+  display: grid;
+  gap: 7px;
+  color: #4f4a40;
+  font-weight: 800;
+}
+
+.seller-product-form input,
+.seller-product-form select,
+.seller-product-form textarea {
+  width: 100%;
+  border: 1px solid #d8cec0;
+  border-radius: 4px;
+  padding: 0 10px;
+  background: #fff;
+  color: #26251f;
+  font: inherit;
+}
+
+.seller-product-form input,
+.seller-product-form select {
+  height: 42px;
+}
+
+.seller-product-form textarea {
+  min-height: 110px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.seller-form-wide,
+.seller-product-form button {
+  grid-column: 1 / -1;
+}
+
+.seller-table-wrap {
+  overflow-x: auto;
+}
+
+.seller-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.seller-table th,
+.seller-table td {
+  border-bottom: 1px solid #eee7dd;
+  padding: 12px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.seller-table th {
+  color: #6f6a5e;
+}
+
+.seller-table td:last-child {
+  display: flex;
+  gap: 8px;
+}
+
+.seller-product-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+}
+
+.seller-product-cell img {
+  width: 42px;
+  height: 42px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.seller-card-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.seller-card-list li,
+.seller-metric-grid article {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #eee7dd;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fffdf9;
+}
+
+.seller-card-list strong,
+.seller-metric-grid strong {
+  font-size: 18px;
+}
+
+.seller-card-list span,
+.seller-metric-grid span {
+  color: #6f6a5e;
+  font-weight: 800;
+}
+
+.seller-card-list p,
+.seller-card-list em {
+  margin: 0;
+  color: #6f6a5e;
+}
+
+.seller-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .role-list {
   display: grid;
   gap: 10px;
