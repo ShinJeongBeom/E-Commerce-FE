@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { ANONYMOUS, loadTossPayments } from '@tosspayments/tosspayments-sdk'
-import type { TossPaymentsWidgets } from '@tosspayments/tosspayments-sdk'
 import './App.css'
 
 type Category = 'all' | 'plants' | 'pots' | 'tools' | 'sale'
@@ -1802,8 +1801,6 @@ function App() {
   const [paymentMessage, setPaymentMessage] = useState('')
   const [paymentResult, setPaymentResult] = useState<PaymentResponse | null>(null)
   const [isPaymentLoading, setIsPaymentLoading] = useState(false)
-  const [preparedCheckout, setPreparedCheckout] = useState<OrderCheckoutResponse | null>(null)
-  const tossWidgetsRef = useRef<TossPaymentsWidgets | null>(null)
 
   const filteredProducts = useMemo(() => {
     const keyword = searchKeyword.trim().toLowerCase()
@@ -2107,17 +2104,6 @@ function App() {
     setPaymentMessage('')
 
     try {
-      if (preparedCheckout && tossWidgetsRef.current) {
-        await tossWidgetsRef.current.requestPayment({
-          orderId: preparedCheckout.orderId,
-          orderName: preparedCheckout.orderName,
-          successUrl: `${window.location.origin}/payment/success`,
-          failUrl: `${window.location.origin}/payment/fail`,
-          customerName: accountLoginId || '구매자',
-        })
-        return
-      }
-
       let serverCart = await authFetch<CartItemApiResponse[]>('/cart')
 
       if (serverCart.length === 0) {
@@ -2150,25 +2136,24 @@ function App() {
       })
 
       const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY)
-      const widgets = tossPayments.widgets({ customerKey: accountLoginId || ANONYMOUS })
+      const payment = tossPayments.payment({ customerKey: accountLoginId || ANONYMOUS })
 
-      await widgets.setAmount({
-        currency: 'KRW',
-        value: checkout.amount,
+      await payment.requestPayment({
+        method: 'CARD',
+        amount: {
+          currency: 'KRW',
+          value: checkout.amount,
+        },
+        orderId: checkout.orderId,
+        orderName: checkout.orderName,
+        successUrl: `${window.location.origin}/payment/success`,
+        failUrl: `${window.location.origin}/payment/fail`,
+        customerName: accountLoginId || '구매자',
+        card: {
+          flowMode: 'DEFAULT',
+          useEscrow: false,
+        },
       })
-
-      await widgets.renderPaymentMethods({
-        selector: '#payment-method',
-        variantKey: 'DEFAULT',
-      })
-      await widgets.renderAgreement({
-        selector: '#agreement',
-        variantKey: 'AGREEMENT',
-      })
-
-      tossWidgetsRef.current = widgets
-      setPreparedCheckout(checkout)
-      setPaymentMessage('결제수단을 선택한 뒤 Toss 테스트 결제를 진행하세요.')
     } catch (error) {
       setPaymentMessage(error instanceof Error ? error.message : '결제 요청에 실패했습니다.')
     } finally {
@@ -2193,8 +2178,6 @@ function App() {
 
       setPaymentResult(result)
       setCart([])
-      setPreparedCheckout(null)
-      tossWidgetsRef.current = null
       setPaymentMessage('결제가 완료되었습니다.')
       window.history.replaceState({}, '', '/')
     } catch (error) {
@@ -2782,17 +2765,9 @@ function App() {
             <aside className="cart-total">
               <span>총 결제 예정 금액</span>
               <strong>{cartTotal.toLocaleString()}원</strong>
-              <div className="toss-widget-area">
-                <div id="payment-method" />
-                <div id="agreement" />
-              </div>
               {paymentMessage && <p className="payment-message">{paymentMessage}</p>}
               <button type="button" onClick={startCartPayment} disabled={isPaymentLoading}>
-                {isPaymentLoading
-                  ? '결제 준비 중'
-                  : preparedCheckout
-                    ? 'Toss 테스트 결제하기'
-                    : '장바구니 상품 주문하기'}
+                {isPaymentLoading ? '결제창 여는 중' : 'Toss 테스트 결제하기'}
               </button>
             </aside>
           </div>
