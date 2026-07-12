@@ -70,6 +70,16 @@ type PaymentResponse = {
   receiptUrl: string | null
 }
 
+type OrderHistoryResponse = {
+  orderId: number
+  orderNumber: string
+  totalPrice: number
+  status: string
+  name: string
+  phone: string
+  address: string
+}
+
 type SignupForm = {
   name: string
   email: string
@@ -1478,6 +1488,30 @@ function MyPage({
   onBack: () => void
   onOpenShop: () => void
 }) {
+  const [orders, setOrders] = useState<OrderHistoryResponse[]>([])
+  const [isOrderLoading, setIsOrderLoading] = useState(true)
+  const [orderMessage, setOrderMessage] = useState('')
+  const paidOrderCount = orders.filter((order) => order.status === 'PAID').length
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    authFetch<OrderHistoryResponse[]>('/orders/member/me', { signal: controller.signal })
+      .then((data) => {
+        setOrders(data)
+        setOrderMessage('')
+      })
+      .catch((error) => {
+        if (isAbortError(error)) return
+        setOrderMessage(error instanceof Error ? error.message : '주문 내역을 불러오지 못했습니다.')
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsOrderLoading(false)
+      })
+
+    return () => controller.abort()
+  }, [])
+
   return (
     <main className="storefront">
       <section className="role-page">
@@ -1506,8 +1540,8 @@ function MyPage({
             <strong>{cartTotal.toLocaleString()}원</strong>
           </article>
           <article>
-            <span>리뷰 관리</span>
-            <strong>0건</strong>
+            <span>결제 완료</span>
+            <strong>{paidOrderCount.toLocaleString()}건</strong>
           </article>
         </div>
 
@@ -1550,7 +1584,22 @@ function MyPage({
 
         <section className="role-panel">
           <h2>주문 내역</h2>
-          <p>결제 시스템 연동 후 주문 내역이 자동으로 표시됩니다.</p>
+          {isOrderLoading && <p>주문 내역을 불러오고 있습니다.</p>}
+          {orderMessage && <p className="payment-message">{orderMessage}</p>}
+          {!isOrderLoading && !orderMessage && orders.length === 0 && <p>주문 내역이 없습니다.</p>}
+          {!isOrderLoading && !orderMessage && orders.length > 0 && (
+            <ul className="role-list order-history-list">
+              {orders.map((order) => (
+                <li key={order.orderId}>
+                  <span>
+                    {order.orderNumber}
+                    <em>{order.status === 'PAID' ? '결제 완료' : order.status}</em>
+                  </span>
+                  <strong>{order.totalPrice.toLocaleString()}원</strong>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </section>
     </main>
@@ -2055,8 +2104,8 @@ function App() {
       await widgets.requestPayment({
         orderId: checkout.orderId,
         orderName: checkout.orderName,
-        successUrl: `${window.location.origin}${window.location.pathname}`,
-        failUrl: `${window.location.origin}${window.location.pathname}`,
+        successUrl: `${window.location.origin}/payment/success`,
+        failUrl: `${window.location.origin}/payment/fail`,
         customerName: accountLoginId || '구매자',
       })
     } catch (error) {
@@ -2084,7 +2133,7 @@ function App() {
       setPaymentResult(result)
       setCart([])
       setPaymentMessage('결제가 완료되었습니다.')
-      window.history.replaceState({}, '', window.location.pathname)
+      window.history.replaceState({}, '', '/')
     } catch (error) {
       setPaymentResult(null)
       setPaymentMessage(error instanceof Error ? error.message : '결제 승인에 실패했습니다.')
@@ -2094,6 +2143,7 @@ function App() {
   }
 
   useEffect(() => {
+    const pathname = window.location.pathname
     const params = new URLSearchParams(window.location.search)
     const paymentKey = params.get('paymentKey')
     const orderId = params.get('orderId')
@@ -2102,16 +2152,16 @@ function App() {
     const failMessage = params.get('message')
 
     const timeoutId = window.setTimeout(() => {
-      if (paymentKey && orderId && amount) {
+      if (pathname === '/payment/success' && paymentKey && orderId && amount) {
         confirmPayment(paymentKey, orderId, Number(amount))
         return
       }
 
-      if (failCode || failMessage) {
+      if (pathname === '/payment/fail' || failCode || failMessage) {
         setPaymentResult(null)
         setPaymentMessage(`결제가 취소되었거나 실패했습니다. ${failMessage ?? failCode ?? ''}`)
         setView('payment-result')
-        window.history.replaceState({}, '', window.location.pathname)
+        window.history.replaceState({}, '', '/')
       }
     }, 0)
 
