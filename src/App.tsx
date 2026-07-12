@@ -439,6 +439,20 @@ function wait(milliseconds: number) {
   })
 }
 
+function clearStoredAuth() {
+  localStorage.removeItem('accessToken')
+  localStorage.removeItem('accountRole')
+  localStorage.removeItem('accountLoginId')
+}
+
+async function assertAuthorizedResponse(response: Response) {
+  if (response.status !== 401) return
+
+  clearStoredAuth()
+  window.dispatchEvent(new Event('auth-expired'))
+  throw new Error(await readApiResponseMessage(response))
+}
+
 async function adminFetch<T>(path: string, options: RequestInit = {}) {
   const accessToken = localStorage.getItem('accessToken')
   const headers = new Headers(options.headers)
@@ -479,6 +493,7 @@ async function adminFetch<T>(path: string, options: RequestInit = {}) {
   }
 
   if (!response.ok) {
+    await assertAuthorizedResponse(response)
     throw new Error(await readApiResponseMessage(response))
   }
 
@@ -530,6 +545,7 @@ async function authFetch<T>(path: string, options: RequestInit = {}) {
   }
 
   if (!response.ok) {
+    await assertAuthorizedResponse(response)
     throw new Error(await readApiResponseMessage(response))
   }
 
@@ -1916,15 +1932,26 @@ function App() {
   }
 
   function logout() {
-    localStorage.removeItem('accessToken')
-    localStorage.removeItem('accountRole')
-    localStorage.removeItem('accountLoginId')
+    clearStoredAuth()
     setIsLoggedIn(false)
     setAccountLoginId('')
     setAccountRole('USER')
     setAuthMessage('')
     setView('home')
   }
+
+  useEffect(() => {
+    function handleAuthExpired() {
+      setIsLoggedIn(false)
+      setAccountLoginId('')
+      setAccountRole('USER')
+      setAuthMessage('로그인이 만료되었습니다. 다시 로그인해주세요.')
+      setView('auth')
+    }
+
+    window.addEventListener('auth-expired', handleAuthExpired)
+    return () => window.removeEventListener('auth-expired', handleAuthExpired)
+  }, [])
 
   function changeSignupField(field: keyof SignupForm, value: string) {
     setSignupForm((form) => ({ ...form, [field]: value }))
