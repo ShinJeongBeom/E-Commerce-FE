@@ -1048,6 +1048,18 @@ input {
   font-weight: 800;
 }
 
+.order-history-list span {
+  display: grid;
+  gap: 4px;
+}
+
+.order-history-list em {
+  color: #6f7e4f;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 800;
+}
+
 .role-message-error {
   color: #9f4b34;
   font-weight: 800;
