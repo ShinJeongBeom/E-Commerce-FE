@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
+import { ANONYMOUS, loadTossPayments } from '@tosspayments/tosspayments-sdk'
 import './App.css'
 
 type Category = 'all' | 'plants' | 'pots' | 'tools' | 'sale'
-type View = 'home' | 'shop' | 'auth' | 'admin' | 'seller' | 'mypage' | 'settings'
+type View = 'home' | 'shop' | 'auth' | 'admin' | 'seller' | 'mypage' | 'settings' | 'payment-result'
 type AuthMode = 'login' | 'signup'
 type UserRole = 'USER' | 'SELLER' | 'ADMIN'
 type AdminSectionId = 'orders' | 'boards' | 'members' | 'main-products' | 'banners' | 'products' | 'statistics' | 'policies' | 'audit'
@@ -39,6 +40,34 @@ type ProductApiResponse = {
 type CartItem = {
   product: Product
   quantity: number
+}
+
+type CartItemApiResponse = {
+  cartItemId: number
+  productId: number
+  productName: string
+  price: number
+  quantity: number
+}
+
+type OrderCheckoutResponse = {
+  orderId: string
+  orderName: string
+  amount: number
+}
+
+type PaymentResponse = {
+  paymentId: number
+  orderId: number
+  paymentKey: string
+  tossOrderId: string
+  orderName: string
+  totalAmount: number
+  method: string
+  status: string
+  requestedAt: string
+  approvedAt: string | null
+  receiptUrl: string | null
 }
 
 type SignupForm = {
@@ -233,6 +262,7 @@ type SellerDashboardResponse = {
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
+const TOSS_CLIENT_KEY = import.meta.env.VITE_TOSS_CLIENT_KEY ?? ''
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1459411621453-7b03977f4bfc?auto=format&fit=crop&w=900&q=80'
 
@@ -1606,8 +1636,71 @@ function SettingsPage({
   )
 }
 
+function PaymentResultPage({
+  paymentResult,
+  paymentMessage,
+  onBack,
+}: {
+  paymentResult: PaymentResponse | null
+  paymentMessage: string
+  onBack: () => void
+}) {
+  const isSuccess = Boolean(paymentResult)
+
+  return (
+    <main className="storefront">
+      <section className="role-page">
+        <div className="role-page-heading">
+          <div>
+            <span>payment result</span>
+            <h1>{isSuccess ? '결제 완료' : '결제 확인'}</h1>
+            <p>{paymentMessage || '결제 결과를 확인하고 있습니다.'}</p>
+          </div>
+          <button type="button" onClick={onBack}>
+            쇼핑 계속하기
+          </button>
+        </div>
+
+        {paymentResult && (
+          <section className="role-panel">
+            <h2>결제 정보</h2>
+            <dl className="settings-list">
+              <div>
+                <dt>주문번호</dt>
+                <dd>{paymentResult.tossOrderId}</dd>
+              </div>
+              <div>
+                <dt>주문명</dt>
+                <dd>{paymentResult.orderName}</dd>
+              </div>
+              <div>
+                <dt>결제수단</dt>
+                <dd>{paymentResult.method}</dd>
+              </div>
+              <div>
+                <dt>결제상태</dt>
+                <dd>{paymentResult.status}</dd>
+              </div>
+              <div>
+                <dt>결제금액</dt>
+                <dd>{paymentResult.totalAmount.toLocaleString()}원</dd>
+              </div>
+            </dl>
+            {paymentResult.receiptUrl && (
+              <a className="receipt-link" href={paymentResult.receiptUrl} target="_blank" rel="noreferrer">
+                영수증 보기
+              </a>
+            )}
+          </section>
+        )}
+      </section>
+    </main>
+  )
+}
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => Boolean(localStorage.getItem('accessToken')))
+  const [accountLoginId, setAccountLoginId] = useState(() => localStorage.getItem('accountLoginId') ?? '')
   const [accountRole, setAccountRole] = useState<UserRole>(
     () => (localStorage.getItem('accountRole') as UserRole | null) ?? 'USER',
   )
@@ -1640,6 +1733,9 @@ function App() {
   const [wishlist, setWishlist] = useState<Product[]>([])
   const [searchKeyword, setSearchKeyword] = useState('')
   const [carouselIndex, setCarouselIndex] = useState(0)
+  const [paymentMessage, setPaymentMessage] = useState('')
+  const [paymentResult, setPaymentResult] = useState<PaymentResponse | null>(null)
+  const [isPaymentLoading, setIsPaymentLoading] = useState(false)
 
   const filteredProducts = useMemo(() => {
     const keyword = searchKeyword.trim().toLowerCase()
@@ -1770,7 +1866,9 @@ function App() {
   function logout() {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('accountRole')
+    localStorage.removeItem('accountLoginId')
     setIsLoggedIn(false)
+    setAccountLoginId('')
     setAccountRole('USER')
     setAuthMessage('')
     setView('home')
@@ -1849,7 +1947,9 @@ function App() {
 
     localStorage.setItem('accessToken', accessToken)
     localStorage.setItem('accountRole', role)
+    localStorage.setItem('accountLoginId', data.loginId ?? loginId)
     setIsLoggedIn(true)
+    setAccountLoginId(data.loginId ?? loginId)
     setAccountRole(role)
     setLoginPassword('')
     setAuthMessage('')
@@ -1866,7 +1966,7 @@ function App() {
     })
   }
 
-  function addToCart(product: Product) {
+  async function addToCart(product: Product) {
     setCart((items) => {
       const exists = items.find((item) => item.product.id === product.id)
       if (exists) {
@@ -1876,6 +1976,20 @@ function App() {
       }
       return [...items, { product, quantity }]
     })
+
+    if (!isLoggedIn) return
+
+    try {
+      await authFetch('/cart', {
+        method: 'POST',
+        body: JSON.stringify({
+          productId: product.id,
+          quantity,
+        }),
+      })
+    } catch (error) {
+      setPaymentMessage(error instanceof Error ? error.message : '서버 장바구니 저장에 실패했습니다.')
+    }
   }
 
   function updateCartQuantity(productId: number, nextQuantity: number) {
@@ -1893,6 +2007,116 @@ function App() {
 
   const productPrice = selectedProduct.salePrice ?? selectedProduct.price
   const productTotal = productPrice * quantity
+
+  async function startCartPayment() {
+    if (!isLoggedIn) {
+      openLogin()
+      return
+    }
+
+    if (!TOSS_CLIENT_KEY) {
+      setPaymentMessage('Toss 클라이언트 키가 설정되지 않았습니다.')
+      return
+    }
+
+    if (cart.length === 0) {
+      setPaymentMessage('장바구니에 담긴 상품이 없습니다.')
+      return
+    }
+
+    setIsPaymentLoading(true)
+    setPaymentMessage('')
+
+    try {
+      const serverCart = await authFetch<CartItemApiResponse[]>('/cart')
+
+      if (serverCart.length === 0) {
+        throw new Error('서버 장바구니가 비어 있습니다. 상품을 다시 담아주세요.')
+      }
+
+      const checkout = await authFetch<OrderCheckoutResponse>('/orders/checkout', {
+        method: 'POST',
+        body: JSON.stringify({
+          cartItemIds: serverCart.map((item) => item.cartItemId),
+          name: accountLoginId || '구매자',
+          phone: '010-0000-0000',
+          address: '테스트 배송지',
+        }),
+      })
+
+      const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY)
+      const widgets = tossPayments.widgets({ customerKey: accountLoginId || ANONYMOUS })
+
+      await widgets.setAmount({
+        currency: 'KRW',
+        value: checkout.amount,
+      })
+
+      await widgets.requestPayment({
+        orderId: checkout.orderId,
+        orderName: checkout.orderName,
+        successUrl: `${window.location.origin}${window.location.pathname}`,
+        failUrl: `${window.location.origin}${window.location.pathname}`,
+        customerName: accountLoginId || '구매자',
+      })
+    } catch (error) {
+      setPaymentMessage(error instanceof Error ? error.message : '결제 요청에 실패했습니다.')
+    } finally {
+      setIsPaymentLoading(false)
+    }
+  }
+
+  async function confirmPayment(paymentKey: string, orderId: string, amount: number) {
+    setIsPaymentLoading(true)
+    setPaymentMessage('결제 승인 중입니다.')
+    setView('payment-result')
+
+    try {
+      const result = await authFetch<PaymentResponse>('/payments/confirm', {
+        method: 'POST',
+        body: JSON.stringify({
+          paymentKey,
+          orderId,
+          amount,
+        }),
+      })
+
+      setPaymentResult(result)
+      setCart([])
+      setPaymentMessage('결제가 완료되었습니다.')
+      window.history.replaceState({}, '', window.location.pathname)
+    } catch (error) {
+      setPaymentResult(null)
+      setPaymentMessage(error instanceof Error ? error.message : '결제 승인에 실패했습니다.')
+    } finally {
+      setIsPaymentLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const paymentKey = params.get('paymentKey')
+    const orderId = params.get('orderId')
+    const amount = params.get('amount')
+    const failCode = params.get('code')
+    const failMessage = params.get('message')
+
+    const timeoutId = window.setTimeout(() => {
+      if (paymentKey && orderId && amount) {
+        confirmPayment(paymentKey, orderId, Number(amount))
+        return
+      }
+
+      if (failCode || failMessage) {
+        setPaymentResult(null)
+        setPaymentMessage(`결제가 취소되었거나 실패했습니다. ${failMessage ?? failCode ?? ''}`)
+        setView('payment-result')
+        window.history.replaceState({}, '', window.location.pathname)
+      }
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [])
 
   if (view === 'admin') {
     return <AdminDashboard onLogout={logout} onOpenUserView={() => setView('home')} />
@@ -1921,6 +2145,16 @@ function App() {
         isLoggedIn={isLoggedIn}
         onBack={() => setView('home')}
         onLogout={logout}
+      />
+    )
+  }
+
+  if (view === 'payment-result') {
+    return (
+      <PaymentResultPage
+        paymentResult={paymentResult}
+        paymentMessage={isPaymentLoading ? '결제 승인 중입니다.' : paymentMessage}
+        onBack={() => setView('home')}
       />
     )
   }
@@ -2441,7 +2675,10 @@ function App() {
             <aside className="cart-total">
               <span>총 결제 예정 금액</span>
               <strong>{cartTotal.toLocaleString()}원</strong>
-              <button type="button">장바구니 상품 주문하기</button>
+              {paymentMessage && <p className="payment-message">{paymentMessage}</p>}
+              <button type="button" onClick={startCartPayment} disabled={isPaymentLoading}>
+                {isPaymentLoading ? '결제 준비 중' : '장바구니 상품 주문하기'}
+              </button>
             </aside>
           </div>
         )}
