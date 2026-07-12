@@ -853,6 +853,19 @@ input {
   font-size: 28px;
 }
 
+.payment-message {
+  margin: 0;
+  color: #9f4b34;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.receipt-link {
+  justify-self: start;
+  color: #314932;
+  font-weight: 800;
+}
+
 .kakao-talk {
   position: fixed;
   right: 24px;
