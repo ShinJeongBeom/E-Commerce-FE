@@ -792,17 +792,6 @@ input {
   border-color: #1e1d19;
 }
 
-.purchase-actions .naver-pay {
-  background: #03c75a;
-  border-color: #03c75a;
-}
-
-.purchase-actions .kakao-pay {
-  background: #fee500;
-  border-color: #fee500;
-  color: #191600;
-}
-
 .cart-section {
   padding: 36px;
   border-top: 1px solid #ebe5da;
@@ -851,6 +840,16 @@ input {
 
 .cart-total strong {
   font-size: 28px;
+}
+
+.toss-widget-area {
+  display: grid;
+  gap: 10px;
+  margin: 6px 0;
+}
+
+.toss-widget-area:empty {
+  display: none;
 }
 
 .payment-message {
