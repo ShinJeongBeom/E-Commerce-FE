@@ -472,6 +472,24 @@ async function readApiResponseMessage(response: Response) {
   return text || '요청 처리에 실패했습니다.'
 }
 
+async function readApiResponse<T>(response: Response) {
+  if (response.status === 204) {
+    return undefined as T
+  }
+
+  const text = await response.text()
+  if (!text) {
+    return undefined as T
+  }
+
+  const contentType = response.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json')) {
+    return text as T
+  }
+
+  return JSON.parse(text) as T
+}
+
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === 'AbortError'
 }
@@ -544,12 +562,7 @@ async function adminFetch<T>(path: string, options: RequestInit = {}) {
     throw new Error(await readApiResponseMessage(response))
   }
 
-  if (response.status === 204) {
-    return undefined as T
-  }
-
-  const text = await response.text()
-  return (text ? JSON.parse(text) : undefined) as T
+  return readApiResponse<T>(response)
 }
 
 async function authFetch<T>(path: string, options: RequestInit = {}) {
@@ -596,8 +609,7 @@ async function authFetch<T>(path: string, options: RequestInit = {}) {
     throw new Error(await readApiResponseMessage(response))
   }
 
-  const text = await response.text()
-  return (text ? JSON.parse(text) : undefined) as T
+  return readApiResponse<T>(response)
 }
 
 function resolveProductCategory(product: ProductApiResponse): Product['category'] {
@@ -621,20 +633,38 @@ function resolveProductCategory(product: ProductApiResponse): Product['category'
   return 'plants'
 }
 
+const careLevelLabels: Record<string, string> = {
+  EASY: '초보 추천',
+  NORMAL: '보통 난이도',
+  HARD: '관리 주의',
+}
+
+const lightRequirementLabels: Record<string, string> = {
+  LOW: '반음지',
+  MEDIUM: '밝은 간접광',
+  HIGH: '충분한 햇빛',
+}
+
+const wateringCycleLabels: Record<string, string> = {
+  WEEKLY: '주 1회 물주기',
+  BIWEEKLY: '2주 1회 물주기',
+  MONTHLY: '월 1회 물주기',
+}
+
 function toStorefrontProduct(product: ProductApiResponse): Product {
+  const category = resolveProductCategory(product)
   const tags = [
-    product.plantType,
-    product.careLevel,
-    product.lightRequirement,
-    product.wateringCycle,
+    categoryLabels[category],
+    product.careLevel ? careLevelLabels[product.careLevel] : null,
+    product.lightRequirement ? lightRequirementLabels[product.lightRequirement] : null,
+    product.wateringCycle ? wateringCycleLabels[product.wateringCycle] : null,
     product.potIncluded,
-    product.status,
   ].filter((tag): tag is string => Boolean(tag))
 
   return {
     id: product.id,
     name: product.name,
-    category: resolveProductCategory(product),
+    category,
     price: product.price,
     deliveryFee: 3000,
     shortInfo: product.description || product.plantType || '꽃동산에서 판매 중인 식물 상품입니다.',
@@ -1441,7 +1471,13 @@ function AdminBoard({ title, posts }: { title: string; posts: AdminBoardPost[] }
   )
 }
 
-function SellerCenterPage({ onBack }: { onBack: () => void }) {
+function SellerCenterPage({
+  onBack,
+  onProductsChanged,
+}: {
+  onBack: () => void
+  onProductsChanged: () => Promise<void>
+}) {
   function createDefaultProductForm(): SellerProductForm {
     return {
       name: '',
@@ -1616,6 +1652,7 @@ function SellerCenterPage({ onBack }: { onBack: () => void }) {
       }
       resetProductForm()
       await loadSellerSection('products')
+      await onProductsChanged()
       setActiveSection('products')
     } catch (error) {
       setSectionMessage(error instanceof Error ? error.message : '상품 저장에 실패했습니다.')
@@ -2277,36 +2314,45 @@ function App() {
   const carouselProducts = saleProducts.length > 0 ? saleProducts : products
   const carouselProduct = carouselProducts[carouselIndex % carouselProducts.length]
 
+  const refreshProducts = useCallback(async (signal?: AbortSignal) => {
+    const response = await fetch(`${API_BASE_URL}/products`, { signal })
+    if (!response.ok) {
+      throw new Error(await readApiResponseMessage(response))
+    }
+
+    const data = (await response.json()) as ProductApiResponse[]
+    const nextProducts = data.map(toStorefrontProduct)
+
+    if (nextProducts.length > 0) {
+      setProducts(nextProducts)
+      setSelectedProduct((current) => nextProducts.find((product) => product.id === current.id) ?? nextProducts[0])
+      setSelectedImage((currentImage) => {
+        const currentProduct = nextProducts.find((product) => product.images.includes(currentImage))
+        return currentProduct ? currentImage : nextProducts[0].images[0]
+      })
+      setProductMessage('')
+    }
+  }, [])
+
   useEffect(() => {
     const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => {
+      refreshProducts(controller.signal)
+        .catch((error) => {
+          if (isAbortError(error)) return
+          setProductMessage(
+            error instanceof Error
+              ? `상품 API 연결 실패: ${error.message}. 기본 상품으로 표시합니다.`
+              : '상품 API 연결 실패로 기본 상품을 표시합니다.',
+          )
+        })
+    }, 0)
 
-    fetch(`${API_BASE_URL}/products`, { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error(await readApiResponseMessage(response))
-        }
-
-        const data = (await response.json()) as ProductApiResponse[]
-        const nextProducts = data.map(toStorefrontProduct)
-
-        if (nextProducts.length > 0) {
-          setProducts(nextProducts)
-          setSelectedProduct(nextProducts[0])
-          setSelectedImage(nextProducts[0].images[0])
-          setProductMessage('')
-        }
-      })
-      .catch((error) => {
-        if (isAbortError(error)) return
-        setProductMessage(
-          error instanceof Error
-            ? `상품 API 연결 실패: ${error.message}. 기본 상품으로 표시합니다.`
-            : '상품 API 연결 실패로 기본 상품을 표시합니다.',
-        )
-      })
-
-    return () => controller.abort()
-  }, [])
+    return () => {
+      window.clearTimeout(timeoutId)
+      controller.abort()
+    }
+  }, [refreshProducts])
 
   useEffect(() => {
     if (carouselProducts.length === 0) return undefined
@@ -2374,6 +2420,9 @@ function App() {
     setIsLoggedIn(false)
     setAccountLoginId('')
     setAccountRole('USER')
+    setCart([])
+    setWishlist([])
+    setPaymentMessage('')
     setAuthMessage('')
     setView('home')
   }
@@ -2383,6 +2432,9 @@ function App() {
       setIsLoggedIn(false)
       setAccountLoginId('')
       setAccountRole('USER')
+      setCart([])
+      setWishlist([])
+      setPaymentMessage('')
       setAuthMessage('로그인이 만료되었습니다. 다시 로그인해주세요.')
       setView('auth')
     }
@@ -2468,6 +2520,9 @@ function App() {
     setIsLoggedIn(true)
     setAccountLoginId(data.loginId ?? loginId)
     setAccountRole(role)
+    setCart([])
+    setWishlist([])
+    setPaymentMessage('')
     setLoginPassword('')
     setAuthMessage('')
     setView(role === 'ADMIN' ? 'admin' : 'home')
@@ -2504,14 +2559,32 @@ function App() {
           quantity,
         }),
       })
+      setPaymentMessage('')
     } catch (error) {
       setPaymentMessage(error instanceof Error ? error.message : '서버 장바구니 저장에 실패했습니다.')
     }
   }
 
+  async function removeCartProduct(productId: number) {
+    setCart((items) => items.filter((item) => item.product.id !== productId))
+    setPaymentMessage('')
+
+    if (!isLoggedIn) return
+
+    try {
+      const serverCart = await authFetch<CartItemApiResponse[]>('/cart')
+      const serverItem = serverCart.find((item) => item.productId === productId)
+      if (serverItem) {
+        await authFetch(`/cart/${serverItem.cartItemId}`, { method: 'DELETE' })
+      }
+    } catch (error) {
+      setPaymentMessage(error instanceof Error ? error.message : '장바구니 상품 삭제에 실패했습니다.')
+    }
+  }
+
   function updateCartQuantity(productId: number, nextQuantity: number) {
     if (nextQuantity <= 0) {
-      setCart((items) => items.filter((item) => item.product.id !== productId))
+      void removeCartProduct(productId)
       return
     }
 
@@ -2660,7 +2733,7 @@ function App() {
   }
 
   if (view === 'seller') {
-    return <SellerCenterPage onBack={() => setView('home')} />
+    return <SellerCenterPage onBack={() => setView('home')} onProductsChanged={() => refreshProducts()} />
   }
 
   if (view === 'mypage') {
@@ -3200,6 +3273,14 @@ function App() {
                   <strong>
                     {((item.product.salePrice ?? item.product.price) * item.quantity).toLocaleString()}원
                   </strong>
+                  <button
+                    type="button"
+                    className="cart-remove-button"
+                    aria-label={`${item.product.name} 장바구니에서 삭제`}
+                    onClick={() => removeCartProduct(item.product.id)}
+                  >
+                    ×
+                  </button>
                 </article>
               ))}
             </div>

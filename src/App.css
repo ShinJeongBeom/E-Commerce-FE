@@ -814,7 +814,7 @@ input {
 
 .cart-item {
   display: grid;
-  grid-template-columns: 86px 1fr 90px 130px;
+  grid-template-columns: 86px 1fr 90px 130px 42px;
   align-items: center;
   gap: 16px;
   padding: 12px;
@@ -826,6 +826,24 @@ input {
 .cart-item img {
   height: 86px;
   border-radius: 6px;
+}
+
+.cart-remove-button {
+  width: 42px;
+  height: 42px;
+  border: 1px solid #d8cec0;
+  border-radius: 50%;
+  background: #fff;
+  color: #9f4b34;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cart-remove-button:hover {
+  border-color: #9f4b34;
+  background: #fff7f2;
 }
 
 .cart-total {
