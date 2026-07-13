@@ -7,7 +7,7 @@ type Category = 'all' | 'plants' | 'pots' | 'tools' | 'sale'
 type View = 'home' | 'shop' | 'auth' | 'admin' | 'seller' | 'mypage' | 'settings' | 'payment-result'
 type AuthMode = 'login' | 'signup'
 type UserRole = 'USER' | 'SELLER' | 'ADMIN'
-type AdminSectionId = 'orders' | 'boards' | 'members' | 'main-products' | 'banners' | 'products' | 'statistics' | 'policies' | 'audit'
+type AdminSectionId = 'orders' | 'boards' | 'members' | 'products' | 'statistics' | 'policies'
 
 type Product = {
   id: number
@@ -184,15 +184,6 @@ type AdminProduct = {
   status: string
 }
 
-type AdminBanner = {
-  id: number
-  title: string
-  imageUrl: string
-  linkUrl: string
-  visible: boolean
-  sortOrder: number
-}
-
 type AdminPolicy = {
   id: number
   policyKey: string
@@ -232,16 +223,6 @@ type AdminSettlement = {
   storeName: string
   amount: number
   status: string
-}
-
-type AdminAuditLog = {
-  id: number
-  adminLoginId: string
-  action: string
-  targetType: string
-  targetId: number
-  description: string
-  createdAt: string | null
 }
 
 type AdminPage<T> = {
@@ -452,12 +433,42 @@ const adminMenus: AdminMenu[] = [
   { id: 'orders', label: '주문 관리' },
   { id: 'boards', label: '게시판 관리' },
   { id: 'members', label: '회원 관리' },
-  { id: 'main-products', label: '메인 상품 관리' },
-  { id: 'banners', label: '배너 관리' },
   { id: 'products', label: '상품 관리' },
   { id: 'statistics', label: '통계' },
   { id: 'policies', label: '기본 정책 관리' },
-  { id: 'audit', label: '감사 로그' },
+]
+
+const defaultAdminPolicies: AdminPolicy[] = [
+  {
+    id: -1,
+    policyKey: 'product-policy',
+    title: '상품 운영 정책',
+    content: '판매자는 승인 후 상품을 등록할 수 있으며, 관리자는 부적절한 상품을 숨김/복구/삭제 처리할 수 있습니다.',
+  },
+  {
+    id: -2,
+    policyKey: 'order-policy',
+    title: '주문 처리 정책',
+    content: '결제 완료 주문은 판매자 주문 관리 대상이 되며, 배송 준비와 배송 완료 상태를 기준으로 운영합니다.',
+  },
+  {
+    id: -3,
+    policyKey: 'seller-policy',
+    title: '판매자 승인 정책',
+    content: '판매자 가입 계정은 관리자 승인 후 판매자 센터의 상품 등록, 주문 관리, 매출 관리 기능을 사용할 수 있습니다.',
+  },
+  {
+    id: -4,
+    policyKey: 'settlement-policy',
+    title: '정산 정책',
+    content: '정산 대기 금액은 결제 완료 주문을 기준으로 집계하고, 관리자 확인 후 정산 완료 상태로 변경합니다.',
+  },
+  {
+    id: -5,
+    policyKey: 'report-policy',
+    title: '신고 처리 정책',
+    content: '신고된 상품과 리뷰는 관리자 검수 후 처리 완료하거나 상품 판매 상태를 조정합니다.',
+  },
 ]
 
 async function readApiResponseMessage(response: Response) {
@@ -762,9 +773,6 @@ function AdminDashboard({ onLogout, onOpenUserView }: { onLogout: () => void; on
           <button type="button" onClick={onOpenUserView}>
             이용자 화면 보기
           </button>
-          <button type="button" onClick={() => window.alert('사내 게시판은 다음 단계에서 연결합니다.')}>
-            사내 게시판
-          </button>
           <button type="button" onClick={onLogout}>
             로그아웃
           </button>
@@ -873,6 +881,8 @@ function toAdminSection(target: string): AdminSectionId {
   if (target === 'policy') return 'policies'
   if (target === 'statistics') return 'statistics'
   if (target === 'products') return 'products'
+  if (target === 'members') return 'members'
+  if (target === 'boards') return 'boards'
   return 'orders'
 }
 
@@ -893,13 +903,11 @@ function AdminSectionContent({
   const [members, setMembers] = useState<AdminMember[]>([])
   const [sellers, setSellers] = useState<AdminSeller[]>([])
   const [adminProducts, setAdminProducts] = useState<AdminProduct[]>([])
-  const [banners, setBanners] = useState<AdminBanner[]>([])
   const [policies, setPolicies] = useState<AdminPolicy[]>([])
   const [posts, setPosts] = useState<AdminPost[]>([])
   const [inquiries, setInquiries] = useState<AdminInquiry[]>([])
   const [reports, setReports] = useState<AdminReport[]>([])
   const [settlements, setSettlements] = useState<AdminSettlement[]>([])
-  const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([])
   const [filterKeyword, setFilterKeyword] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [page, setPage] = useState(0)
@@ -957,22 +965,13 @@ function AdminSectionContent({
         setSellers(nextSellers)
       }
 
-      if (section === 'main-products' || section === 'products') {
+      if (section === 'products') {
         const [nextProducts, nextReports] = await Promise.all([
           adminFetch<AdminPage<AdminProduct>>(`/admin/products?${buildAdminQuery()}`),
           adminFetch<AdminPage<AdminReport>>('/admin/reports?page=0&size=10'),
         ])
         applyPage(nextProducts, setAdminProducts)
         setReports(nextReports.items)
-      }
-
-      if (section === 'banners') {
-        applyPage(
-          await adminFetch<AdminPage<AdminBanner>>(
-            `/admin/banners?${buildAdminQuery(filterStatus ? { visible: filterStatus } : {}, false)}`,
-          ),
-          setBanners,
-        )
       }
 
       if (section === 'boards') {
@@ -996,18 +995,15 @@ function AdminSectionContent({
       }
 
       if (section === 'policies') {
-        applyPage(await adminFetch<AdminPage<AdminPolicy>>(`/admin/policies?${buildAdminQuery()}`), setPolicies)
-      }
-
-      if (section === 'audit') {
-        applyPage(await adminFetch<AdminPage<AdminAuditLog>>(`/admin/audit-logs?${buildAdminQuery()}`), setAuditLogs)
+        const nextPolicies = await adminFetch<AdminPage<AdminPolicy>>(`/admin/policies?${buildAdminQuery()}`)
+        applyPage(nextPolicies, setPolicies)
       }
     } catch (error) {
       setSectionMessage(error instanceof Error ? error.message : '관리자 메뉴 정보를 불러오지 못했습니다.')
     } finally {
       setIsSectionLoading(false)
     }
-  }, [buildAdminQuery, filterStatus, section])
+  }, [buildAdminQuery, section])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -1033,23 +1029,6 @@ function AdminSectionContent({
   function askRequired(message: string, defaultValue = '') {
     const value = window.prompt(message, defaultValue)?.trim()
     return value || null
-  }
-
-  async function createBanner() {
-    const title = askRequired('배너 제목을 입력하세요.')
-    if (!title) return
-    const imageUrl = askRequired('배너 이미지 URL을 입력하세요.', 'https://example.com/banner.jpg')
-    if (!imageUrl) return
-    const linkUrl = askRequired('배너 링크 URL을 입력하세요.', '/')
-    if (!linkUrl) return
-
-    await runAdminAction(
-      () => adminFetch('/admin/banners', {
-        method: 'POST',
-        body: JSON.stringify({ title, imageUrl, linkUrl, visible: true, sortOrder: banners.length + 1 }),
-      }),
-      '배너를 등록했습니다.',
-    )
   }
 
   async function savePolicy() {
@@ -1119,8 +1098,7 @@ function AdminSectionContent({
   function getStatusOptions() {
     if (section === 'orders') return ['CREATED', 'PAID', 'PREPARING', 'SHIPPED', 'DELIVERED', 'CANCELLED']
     if (section === 'members') return ['ACTIVE', 'SUSPENDED', 'DELETED']
-    if (section === 'main-products' || section === 'products') return ['ON_SALE', 'SOLD_OUT', 'HIDDEN']
-    if (section === 'banners') return ['true', 'false']
+    if (section === 'products') return ['ON_SALE', 'SOLD_OUT', 'HIDDEN']
     if (section === 'statistics') return ['PENDING', 'COMPLETED']
     return []
   }
@@ -1143,20 +1121,10 @@ function AdminSectionContent({
       { title: '오늘 회원 탈퇴', value: `${dashboard.todayStatus.memberWithdrawalCount.toLocaleString()}명`, description: '탈퇴 처리된 회원' },
       { title: '판매자 승인 대기', value: `${dashboard.marketplaceStatus.sellerApprovalWaitingCount.toLocaleString()}건`, description: '관리자 승인이 필요한 판매자 신청' },
     ],
-    'main-products': [
-      { title: '오늘 등록 상품', value: `${dashboard.todayStatus.productCreatedCount.toLocaleString()}건`, description: '오늘 신규 등록된 상품' },
-      { title: '판매 중지 상품', value: `${dashboard.marketplaceStatus.suspendedProductCount.toLocaleString()}개`, description: '숨김 또는 판매 중지 상태의 상품' },
-      { title: '신고된 상품', value: `${dashboard.marketplaceStatus.reportedProductCount.toLocaleString()}건`, description: '운영 검수가 필요한 상품 신고' },
-    ],
-    banners: [
-      { title: '메인 배너', value: '준비 중', description: '홈 화면 대표 배너 노출 관리' },
-      { title: '이벤트 배너', value: '준비 중', description: '이벤트와 기획전 배너 관리' },
-      { title: '노출 상태', value: '기본값', description: '배너 도메인 추가 후 실제 노출 상태 연동' },
-    ],
     products: [
-      { title: '전체 상품 관리', value: `${dashboard.todayStatus.productCreatedCount.toLocaleString()}건`, description: '상품 등록, 수정, 판매 상태 검수' },
+      { title: '오늘 등록 상품', value: `${dashboard.todayStatus.productCreatedCount.toLocaleString()}건`, description: '신규 상품과 메인 노출 상품을 함께 관리' },
+      { title: '판매 중지 상품', value: `${dashboard.marketplaceStatus.suspendedProductCount.toLocaleString()}개`, description: '숨김 또는 판매 중지 상태의 상품' },
       { title: '상품 문의', value: `${dashboard.pendingStatus.productInquiryCount.toLocaleString()}건`, description: '답변 대기 중인 상품 문의' },
-      { title: '신고된 리뷰', value: `${dashboard.marketplaceStatus.reportedReviewCount.toLocaleString()}건`, description: '운영 검수가 필요한 리뷰 신고' },
     ],
     statistics: [
       { title: '오늘 주문', value: `${dashboard.todayStatus.orderCount.toLocaleString()}건`, description: '일간 주문 추이 확인 기준' },
@@ -1167,11 +1135,6 @@ function AdminSectionContent({
       { title: '판매 정책', value: '기본 정책', description: '상품 등록, 판매 중지, 검수 기준' },
       { title: '정산 정책', value: '기본 정책', description: '정산 대기와 지급 기준' },
       { title: '신고 처리 정책', value: '기본 정책', description: '상품과 리뷰 신고 처리 기준' },
-    ],
-    audit: [
-      { title: '감사 로그', value: `${pageInfo.totalElements.toLocaleString()}건`, description: '관리자 상태 변경과 저장 작업 이력' },
-      { title: '현재 페이지', value: `${page + 1}`, description: '감사 로그 페이지 위치' },
-      { title: '검색어', value: filterKeyword || '전체', description: '관리자, 액션, 대상, 설명 기준 검색' },
     ],
   }
 
@@ -1209,15 +1172,14 @@ function AdminSectionContent({
             <option value="">전체 상태</option>
             {statusOptions.map((status) => (
               <option key={status} value={status}>
-                {section === 'banners' ? (status === 'true' ? '노출' : '숨김') : status}
+                {status}
               </option>
             ))}
           </select>
         )}
-        {section === 'banners' && <button type="button" onClick={createBanner}>배너 등록</button>}
         {section === 'policies' && <button type="button" onClick={savePolicy}>정책 저장</button>}
         {section === 'boards' && <button type="button" onClick={createPost}>게시글 등록</button>}
-        {(section === 'main-products' || section === 'products') && (
+        {section === 'products' && (
           <>
             <button type="button" onClick={() => createReport('PRODUCT')}>상품 신고 등록</button>
             <button type="button" onClick={() => createReport('REVIEW')}>리뷰 신고 등록</button>
@@ -1292,7 +1254,7 @@ function AdminSectionContent({
         </>
       )}
 
-      {(section === 'main-products' || section === 'products') && (
+      {section === 'products' && (
         <>
           <AdminTable
             headers={['상품명', '종류', '가격', '재고', '상태', '처리']}
@@ -1318,25 +1280,6 @@ function AdminSectionContent({
             }))}
           />
         </>
-      )}
-
-      {section === 'banners' && (
-        <AdminTable
-          headers={['제목', '링크', '노출', '순서', '처리']}
-          rows={banners.map((banner) => ({
-            id: banner.id,
-            cells: [banner.title, banner.linkUrl, banner.visible ? '노출' : '숨김', `${banner.sortOrder}`],
-            actions: (
-              <>
-                <button type="button" onClick={() => runAdminAction(() => adminFetch(`/admin/banners/${banner.id}`, {
-                  method: 'PUT',
-                  body: JSON.stringify({ ...banner, visible: !banner.visible }),
-                }), '배너 노출 상태를 변경했습니다.')}>노출전환</button>
-                <button type="button" onClick={() => runAdminAction(() => adminFetch(`/admin/banners/${banner.id}`, { method: 'DELETE' }), '배너를 삭제했습니다.')}>삭제</button>
-              </>
-            ),
-          }))}
-        />
       )}
 
       {section === 'boards' && (
@@ -1382,25 +1325,9 @@ function AdminSectionContent({
       {section === 'policies' && (
         <AdminTable
           headers={['정책 키', '제목', '내용']}
-          rows={policies.map((policy) => ({
+          rows={(policies.length > 0 ? policies : defaultAdminPolicies).map((policy) => ({
             id: policy.id,
             cells: [policy.policyKey, policy.title, policy.content],
-          }))}
-        />
-      )}
-
-      {section === 'audit' && (
-        <AdminTable
-          headers={['관리자', '액션', '대상', '설명', '시각']}
-          rows={auditLogs.map((log) => ({
-            id: log.id,
-            cells: [
-              log.adminLoginId,
-              log.action,
-              `${log.targetType} #${log.targetId}`,
-              log.description,
-              log.createdAt ?? '-',
-            ],
           }))}
         />
       )}
